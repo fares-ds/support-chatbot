@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          working-directory: backend
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check
+      - name: Format
+        run: uv run ruff format --check
+      - name: Types
+        run: uv run mypy
+      - name: Tests
+        run: uv run pytest
+
+  stack:
+    name: Compose stack
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start the stack
+        run: docker compose up --build --detach --wait --wait-timeout 300
+      - name: Health through Caddy over HTTPS
+        run: |
+          for attempt in 1 2 3 4 5; do
+            docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt "$RUNNER_TEMP/caddy-root.crt" && break
+            sleep 2
+          done
+          curl --fail --silent --show-error --retry 5 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/caddy-root.crt" https://localhost/api/health | tee "$RUNNER_TEMP/health.json"
+          jq --exit-status '.status == "ok" and .checks == {"postgres": "ok", "valkey": "ok"}' "$RUNNER_TEMP/health.json"
+      - name: Only Caddy publishes ports
+        run: |
+          published=$(docker compose ps --format '{{.Service}} {{.Ports}}' | grep -- '->' | cut -d ' ' -f 1 | sort -u)
+          echo "Services with published ports: $published"
+          test "$published" = caddy
+      - name: Valkey never evicts
+        run: test "$(docker compose exec -T valkey valkey-cli config get maxmemory-policy | tail -n 1)" = noeviction
+      - name: Health fails without Valkey
+        run: |
+          docker compose stop valkey
+          code=$(curl --silent --output "$RUNNER_TEMP/health.json" --write-out '%{http_code}' \
+            --cacert "$RUNNER_TEMP/caddy-root.crt" https://localhost/api/health)
+          cat "$RUNNER_TEMP/health.json"
+          test "$code" = 503
+          jq --exit-status '.status == "down" and .checks == {"postgres": "ok", "valkey": "down"}' "$RUNNER_TEMP/health.json"
+      - name: Logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes

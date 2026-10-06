@@ -1,0 +1,10 @@
+# The development stack: the install bundle's Compose file, with the backend built from source
+# and development values. Run `docker compose up --build` here.
+
+name: support-chatbot
+
+include:
+  - path:
+      - deploy/compose.yaml
+      - deploy/compose.dev.yaml
+    env_file: deploy/dev.env
