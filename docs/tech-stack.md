@@ -1,13 +1,13 @@
 # Support Chatbot tech stack
 
-What every V1 install runs, why each piece is there, and the rules for configuring it. The decisions are recorded in [ADR-0014](adr/0014-v1-tech-stack.md), amended by [ADR-0024](adr/0024-stack-review-corrections.md) and refined by [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md); the API client is in [ADR-0026](adr/0026-typed-api-client-from-openapi.md), and the repository layout in [ADR-0027](adr/0027-repository-layout-and-git-workflow.md). If this page and an ADR disagree, the ADR wins. Requirements (IDs such as AI-8 or SEC-13) live in the [PRD](prd.md).
+What every V1 install runs, why each piece is there, and the rules for configuring it. The decisions are recorded in [ADR-0014](adr/0014-v1-tech-stack.md), amended by [ADR-0024](adr/0024-stack-review-corrections.md) and [ADR-0028](adr/0028-two-tei-containers.md) and refined by [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md). The API client is in [ADR-0026](adr/0026-typed-api-client-from-openapi.md), the repository layout in [ADR-0027](adr/0027-repository-layout-and-git-workflow.md), and the server CLI in [ADR-0029](adr/0029-server-cli-in-standard-library-python.md). If this page and an ADR disagree, the ADR wins. Requirements (IDs such as AI-8 or SEC-13) live in the [PRD](prd.md).
 
 Updated 2026-10-06.
 
 ## At a glance
 
 - **One install per business,** on the business's own VPS ([ADR-0006](adr/0006-one-install-per-business.md), [ADR-0009](adr/0009-vendor-installs-business-operates.md)).
-- **Seven containers under Docker Compose.** Only Caddy is reachable from the internet.
+- **Eight containers under Docker Compose.** Only Caddy is reachable from the internet.
 - **Python 3.12 backend** (FastAPI, Celery) and **TypeScript frontend** (Next.js dashboard, Vite widget).
 - **Postgres 18 with pgvector** holds everything durable. **Valkey** holds everything short-lived.
 - **Models** run locally on CPU (Ollama, TEI), or through an external provider the Owner picks. No GPU is required ([ADR-0011](adr/0011-cpu-first-models.md)).
@@ -28,7 +28,7 @@ flowchart LR
         caddy["Caddy · HTTPS<br/>dashboard and widget files"]
         api["api · FastAPI<br/>WebSockets, LiteLLM, DSPy"]
         worker["worker · Celery and Beat"]
-        tei["TEI<br/>embeddings, reranking"]
+        tei["TEI, two containers<br/>tei-embed, tei-rerank"]
         ollama["Ollama · local LLMs"]
         pg[("Postgres 18<br/>pgvector")]
         valkey[("Valkey")]
@@ -57,12 +57,13 @@ flowchart LR
 | caddy | Caddy | HTTPS with automatic certificates; reverse proxy to the API; serves the dashboard's static files and the widget files | The internet: ports 80 and 443, the only published ports |
 | api | FastAPI on uvicorn, Python 3.12 | REST API, WebSockets, sign-in, identity-token checks, AI turns (classify, retrieve, stream answers) | Caddy |
 | worker | Celery worker with Celery Beat | Ingestion, web import, re-embedding, deletion purges, timed jobs | Internal network only |
-| tei | Text Embeddings Inference, CPU image | Embeddings (`/embed`) and reranking (`/rerank`) for local models | Internal network only |
+| tei-embed | Text Embeddings Inference, CPU image | The local embedding model (`/embed`), also used by the CPU-mode embedding check | Internal network only |
+| tei-rerank | Text Embeddings Inference, CPU image | The local reranker (`/rerank`) | Internal network only |
 | ollama | Ollama | Local LLMs on CPU | Internal network only |
 | postgres | `pgvector/pgvector:pg18` | All durable data: conversations, customers, knowledge, vectors, turn records | Internal network only |
 | valkey | Valkey | Pub/sub between API processes, Celery broker, locks, rate-limit counters, caches | Internal network only |
 
-TEI and Ollama are needed only for local models. On the host, outside the containers, run the server CLI and the cron job for daily backups.
+A TEI container loads one model, so embeddings and reranking take one container each. TEI's CPU image is tagged per architecture: `cpu-<version>` for x86-64 and `cpu-arm64-<version>` for ARM64 ([ADR-0028](adr/0028-two-tei-containers.md)). The TEI containers and Ollama are needed only for local models. On the host, outside the containers, run the server CLI and the cron job for daily backups.
 
 ## Backend
 
@@ -92,7 +93,7 @@ TEI and Ollama are needed only for local models. On the host, outside the contai
 | Local LLMs | Ollama on CPU. M0 picks the default answer model, in the 4–7B class. |
 | GPU hosts | Any OpenAI-compatible endpoint, such as vLLM, set in the model settings. No vLLM container ships. |
 | External providers | Any provider LiteLLM supports, with the Owner's API key, stored encrypted |
-| Embeddings and reranking | TEI, or an external API. First candidates are bge-m3 and bge-reranker-v2-m3; M0 confirms they run on TEI's CPU image. |
+| Embeddings and reranking | TEI, one container each, or an external API. First candidates are bge-m3 and bge-reranker-v2-m3; M0 confirms they run on TEI's CPU image. |
 | Who picks models | The vendor sets each install's starting models; the Owner may change any of them, at their own risk ([ADR-0011](adr/0011-cpu-first-models.md)) |
 | Relevance thresholds | Calibrated per model. An uncalibrated model gets no relevance cut-off and is marked "uncalibrated" in the dashboard ([ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). |
 
@@ -171,6 +172,7 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 | Packaging | Docker images pinned by version, run with Docker Compose |
 | Registry | GitHub Container Registry, private, with a read-only token per install |
 | Install | The vendor installs from a versioned bundle: the Compose file, an environment template and the server CLI |
+| Server CLI | `sc`: one Python script using only the standard library, run by the host's `python3` (3.10 or later). `report` and `reset-password` run inside the backend image ([ADR-0029](adr/0029-server-cli-in-standard-library-python.md)). |
 | Upgrade | `upgrade <version>`: check, back up, pull, migrate once, restart, verify, and roll back on failure ([ADR-0013](adr/0013-upgrades-and-migrations.md)) |
 | Backups | The host's cron runs `backup` daily: a database dump plus the stored files, encrypted by restic and sent to an off-server repository (destination still open) |
 | Health | A health check on every container, a `status` command, and the vendor's external uptime check on each install's health endpoint |

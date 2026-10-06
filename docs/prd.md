@@ -441,7 +441,7 @@ Each criterion is a test that can be run. All stories are P0.
 
 **US-1 · Install a copy** (UC1). As the vendor, I want one command to set up an install, so that every business gets the same tested setup.
 
-- Given a VPS that meets the published minimums, when the vendor runs the installer, then all seven containers report healthy, HTTPS works on the business's domain, and the vendor admin and the first Owner can sign in.
+- Given a VPS that meets the published minimums, when the vendor runs the installer, then all eight containers report healthy, HTTPS works on the business's domain, and the vendor admin and the first Owner can sign in.
 
 **US-2 · Connect the website** (UC2). As an Owner, I want the bubble on our site to know who is logged in, so that customers see their own history.
 
@@ -610,7 +610,7 @@ The public widget key is not a secret. For visitors, these limits are the only p
 
 ## Technical architecture
 
-V1 runs as seven containers under Docker Compose on the business's VPS ([ADR-0014](adr/0014-v1-tech-stack.md), amended by [ADR-0024](adr/0024-stack-review-corrections.md)). Browsers reach only Caddy, which also serves the dashboard and widget files. Model calls leave the server only when the Owner chooses an external provider.
+V1 runs as eight containers under Docker Compose on the business's VPS ([ADR-0014](adr/0014-v1-tech-stack.md), amended by [ADR-0024](adr/0024-stack-review-corrections.md) and [ADR-0028](adr/0028-two-tei-containers.md)). Browsers reach only Caddy, which also serves the dashboard and widget files. Model calls leave the server only when the Owner chooses an external provider.
 
 **Containers on one install.** The business's server signs identity tokens; everything else runs on the business's VPS.
 
@@ -625,7 +625,7 @@ flowchart LR
         caddy["Caddy · HTTPS<br/>dashboard and widget files"]
         api["api · FastAPI<br/>WebSockets, LiteLLM, DSPy"]
         worker["worker · Celery and Beat"]
-        tei["TEI<br/>embeddings, reranking"]
+        tei["TEI, two containers<br/>tei-embed, tei-rerank"]
         ollama["Ollama · local LLMs"]
         pg[("Postgres 18<br/>pgvector")]
         valkey[("Valkey")]
@@ -660,7 +660,7 @@ flowchart LR
 | Database and vector search | Postgres 18 with pgvector (`pgvector/pgvector:pg18`); embeddings as `halfvec`, one HNSW index per model |
 | Model calls | The LiteLLM library; answers stream through it directly, and classification runs as a DSPy module |
 | Local models | Ollama on CPU. Any OpenAI-compatible endpoint, such as vLLM on a GPU host, can be set in the model settings |
-| Embeddings and reranking | Text Embeddings Inference (CPU image), or an external API |
+| Embeddings and reranking | Text Embeddings Inference (CPU image), one container for each, or an external API |
 | Live chat delivery | FastAPI WebSockets, with Valkey pub/sub between processes |
 | Dashboard sign-in | Built into the app: SameSite=Strict cookies and CSRF tokens, on the same domain as the API |
 | Widget sessions | Bearer tokens in the iframe's own storage, never cookies |
@@ -674,6 +674,7 @@ flowchart LR
 | Backups | restic: encrypted, sent to an off-server repository, run daily from the server's cron |
 | Images | GitHub Container Registry, private, with a read-only token per install |
 | Deployment | Docker Compose, images pinned by version, container logs capped in size |
+| Server CLI | `sc`, one Python script using only the standard library, run on the host ([ADR-0029](adr/0029-server-cli-in-standard-library-python.md)) |
 
 The review behind these choices, with its sources, is [ADR-0024](adr/0024-stack-review-corrections.md). Component details and configuration rules are in [tech-stack.md](tech-stack.md).
 
@@ -904,6 +905,8 @@ How the first draft became this PRD. Each row links to its record.
 | 2026-10-06 | Final review: fallbacks for the CPU embedding classifier; no relevance cut-off for uncalibrated models, which the dashboard marks. | [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md) |
 | 2026-10-06 | The TypeScript API client is generated from FastAPI's OpenAPI spec with Hey API; oRPC is not used. | [ADR-0026](adr/0026-typed-api-client-from-openapi.md) |
 | 2026-10-06 | One private repository on the vendor's personal GitHub account, with a root per toolchain; trunk-based, with squash-merged pull requests; releases are `vX.Y.Z` tags. | [ADR-0027](adr/0027-repository-layout-and-git-workflow.md) |
+| 2026-10-06 | TEI loads one model per container, so embeddings and reranking run in two TEI containers; an install runs eight containers. | [ADR-0028](adr/0028-two-tei-containers.md) |
+| 2026-10-06 | The server CLI is one Python script using only the standard library; `report` and `reset-password` run in the backend image. | [ADR-0029](adr/0029-server-cli-in-standard-library-python.md) |
 | 2026-10-05 | Built by Fares alone, with Claude Code; no timeline, milestones only. | — |
 | 2026-10-05 | The Owner sets the AI's display name; "agent" means a human, "AI assistant" the bot. | [glossary](glossary.md) |
 

@@ -1,6 +1,6 @@
 # ADR-0024: Stack corrections after the stack review
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0028](0028-two-tei-containers.md)
 - Date: 2026-10-06
 - Deciders: Fares
 - Amends: [ADR-0014](0014-v1-tech-stack.md)
@@ -57,3 +57,7 @@ A review of the approved stack against the libraries' own documentation found fi
 ## Update, 2026-10-06 (final review)
 
 The CPU classifier's fallbacks, and what happens with models nobody has calibrated, are settled in [ADR-0025](0025-cpu-classifier-fallbacks-and-uncalibrated-models.md).
+
+## Update, 2026-10-06 (M0 planning)
+
+A TEI container loads one model, so embeddings and reranking run in two TEI containers, and an install runs eight containers ([ADR-0028](0028-two-tei-containers.md)).

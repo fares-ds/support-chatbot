@@ -27,13 +27,15 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 | [0021](0021-vendor-admin-account.md) | The vendor has an admin account on every install | Accepted |
 | [0022](0022-eval-data-from-the-live-beta.md) | Evaluation data comes from the live beta | Accepted |
 | [0023](0023-data-retention.md) | How long data is kept | Accepted |
-| [0024](0024-stack-review-corrections.md) | Stack corrections after the stack review | Accepted; refined by 0025 |
+| [0024](0024-stack-review-corrections.md) | Stack corrections after the stack review | Accepted; refined by 0025, amended by 0028 |
 | [0025](0025-cpu-classifier-fallbacks-and-uncalibrated-models.md) | CPU-mode classifier fallbacks and uncalibrated models | Accepted |
 | [0026](0026-typed-api-client-from-openapi.md) | The TypeScript API client is generated from FastAPI's OpenAPI spec | Accepted |
 | [0027](0027-repository-layout-and-git-workflow.md) | One repository with a root per toolchain, and a trunk-based workflow | Accepted |
+| [0028](0028-two-tei-containers.md) | Embeddings and reranking run in two TEI containers | Accepted |
+| [0029](0029-server-cli-in-standard-library-python.md) | The server CLI is a standard-library Python script | Accepted |
 
 ## Adding a decision
 
 1. Copy the format of an existing ADR: Status, Date, Deciders, Context, Decision, Consequences, and Open when something is unresolved.
-2. Take the next number (ADR-0028 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
+2. Take the next number (ADR-0030 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
 3. Add a row here and in the PRD's decision history, update the PRD sections the decision changes, and update the [glossary](../glossary.md) if it introduces or changes a term.
