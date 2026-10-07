@@ -24,3 +24,10 @@ async def test_samples_go_in_order_and_round_again() -> None:
         return sample
 
     assert await run_level(turn, ["a", "b"], concurrency=1, turns=5) == ["a", "b", "a", "b", "a"]
+
+
+async def test_a_level_can_start_where_the_last_one_stopped() -> None:
+    async def turn(sample: str, worker: int) -> str:
+        return sample
+
+    assert await run_level(turn, ["a", "b", "c"], concurrency=1, turns=2, start=2) == ["c", "a"]

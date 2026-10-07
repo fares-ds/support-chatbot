@@ -10,16 +10,17 @@ async def run_level[S, R](
     *,
     concurrency: int,
     turns: int,
+    start: int = 0,
 ) -> list[R]:
     """Runs `turns` turns, `concurrency` at a time: each worker starts its next turn as soon as
     its last one ends, like that many customers asking one question after another. Samples go
-    in order, and round again. `turn` gets the sample and the worker's number."""
+    in order from `start`, and round again. `turn` gets the sample and the worker's number."""
     numbers = iter(range(turns))
     records: dict[int, R] = {}
 
     async def worker(index: int) -> None:
         for number in numbers:
-            records[number] = await turn(samples[number % len(samples)], index)
+            records[number] = await turn(samples[(start + number) % len(samples)], index)
 
     async with asyncio.TaskGroup() as group:
         for index in range(concurrency):

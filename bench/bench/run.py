@@ -316,9 +316,13 @@ async def _run(
         "levels": [],
     }
 
+    # One pass through the samples for the whole run, warm-up included: a level that started
+    # again from the first sample would resend prompts that a runtime's cache still holds.
+    position = 0
     if warmup:
         logger.info("Warming up: %d turns", warmup)
         warm = await run_level(pipeline.run, samples, concurrency=1, turns=warmup)
+        position += warmup
         for record in warm:
             if record.error:
                 logger.warning("Warm-up turn %s failed: %s", record.sample, record.error)
@@ -333,8 +337,11 @@ async def _run(
         pipeline.origin = time.perf_counter()
         async with Sampler(docker, containers) as sampler:
             started = time.perf_counter()
-            records = await run_level(pipeline.run, samples, concurrency=level, turns=turns)
+            records = await run_level(
+                pipeline.run, samples, concurrency=level, turns=turns, start=position
+            )
             duration = time.perf_counter() - started
+        position += turns
         _log_errors(records)
         tracker = sampler.tracker
         results["levels"].append(

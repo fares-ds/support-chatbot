@@ -21,6 +21,8 @@ Every turn runs every step, whatever the classifier decides, so that runs compar
 
 **Concurrency.** At concurrency *n*, *n* simulated customers each ask one question after another. Meanwhile the harness samples every container's memory and CPU twice a second.
 
+**One pass through the samples.** A run, warm-up included, goes through the samples once and then round again, rather than restarting at each level. Otherwise a level would resend prompts that Ollama's prompt cache still holds, and look faster than it is. Keep the turns per level at or below the number of samples for the same reason.
+
 ## Running it
 
 Start the stack first: from the repository root, `docker compose up --build --detach --wait`. Then, from this directory:
