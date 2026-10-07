@@ -62,6 +62,7 @@ flowchart LR
 | ollama | Ollama | Local LLMs on CPU | Internal network only |
 | postgres | `pgvector/pgvector:pg18` | All durable data: conversations, customers, knowledge, vectors, turn records | Internal network only |
 | valkey | Valkey | Pub/sub between API processes, Celery broker, locks, rate-limit counters, caches | Internal network only |
+| migrate | The backend image, run once | Migrates the database to the newest revision, then exits; the API starts only after it succeeds ([ADR-0013](adr/0013-upgrades-and-migrations.md)) | Internal network only |
 
 A TEI container loads one model, so embeddings and reranking take one container each. TEI's CPU image is tagged per architecture: `cpu-<version>` for x86-64 and `cpu-arm64-<version>` for ARM64 ([ADR-0028](adr/0028-two-tei-containers.md)). The TEI containers and Ollama are needed only for local models. On the host, outside the containers, run the server CLI and the cron job for daily backups.
 
@@ -72,7 +73,7 @@ A TEI container loads one model, so embeddings and reranking take one container 
 | Language and packaging | Python 3.12, uv | Taken from the earlier projects |
 | Web framework | FastAPI on uvicorn | Serves REST and WebSockets |
 | Database access | SQLAlchemy | Async sessions in the API; synchronous sessions in Celery workers. Do not wrap async code inside workers. |
-| Migrations | Alembic | Run once per upgrade, in a one-off container, never on application startup. Expand, then contract; no downgrade migrations ([ADR-0013](adr/0013-upgrades-and-migrations.md)). |
+| Migrations | Alembic | Run once per upgrade, in a one-off container (`python -m app.migrate`), never on application startup. Expand, then contract; no downgrade migrations ([ADR-0013](adr/0013-upgrades-and-migrations.md)). Adding a NOT NULL column needs a server default. A contract step sets `contract` to what the previous release stopped using. CI checks these rules from each migration's source (`tools/migration_rules.py`). Revisions are numbered, `0001` onwards. |
 | Background jobs | Celery, with Valkey as the broker | Set the visibility timeout above the longest job measured in M0, or long jobs such as re-embedding run twice. |
 | Timed jobs | Celery Beat, inside the worker container | Auto-resolve after 24 idle hours; close after 4 idle days; visitor cleanup after 9 months; knowledge reconciler every 15 minutes |
 | Live delivery | FastAPI WebSockets; Valkey pub/sub between API processes | Clients send over HTTP and receive over the WebSocket (RT-1 to RT-8) |

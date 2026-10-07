@@ -28,6 +28,13 @@ CHECK_TIMEOUT_SECONDS = 2.0
 type Check = Callable[[], Awaitable[object]]
 """Raises, or runs past the timeout, when its dependency is unreachable."""
 
+type Revision = Callable[[], Awaitable[str | None]]
+"""The database's schema revision: Alembic's, None before the first migration."""
+
+
+async def _no_revision() -> None:
+    return None
+
 
 @dataclass(frozen=True)
 class HealthChecks:
@@ -35,6 +42,7 @@ class HealthChecks:
     """What the API needs to serve requests."""
     others: Mapping[str, Check] = field(default_factory=dict)
     """Everything else the install runs."""
+    schema_revision: Revision = _no_revision
 
 
 class CheckStatus(StrEnum):
@@ -47,12 +55,27 @@ class HealthReport(BaseModel):
     checks: dict[str, CheckStatus]
 
 
+class FullHealthReport(HealthReport):
+    schema_revision: str | None
+    """Reported, never a reason to be unhealthy: an older API keeps running on a newer, expanded
+    schema while an upgrade or a rollback is under way (ADR-0013)."""
+
+
 def postgres_check(engine: AsyncEngine) -> Check:
     async def check() -> None:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
 
     return check
+
+
+def schema_revision(engine: AsyncEngine) -> Revision:
+    async def revision() -> str | None:
+        async with engine.connect() as connection:
+            result = await connection.execute(text("SELECT version_num FROM alembic_version"))
+            return result.scalar_one_or_none()
+
+    return revision
 
 
 def valkey_check(client: Redis) -> Check:
@@ -105,11 +128,18 @@ _UNAVAILABLE: dict[int | str, dict[str, Any]] = {
 }
 
 
-@router.get("/health", responses=_UNAVAILABLE)
+@router.get(
+    "/health",
+    responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": FullHealthReport}},
+)
 async def health(
     response: Response, checks: Annotated[HealthChecks, Depends(get_health_checks)]
-) -> HealthReport:
-    return await _report(response, {**checks.serving, **checks.others})
+) -> FullHealthReport:
+    report, revision = await asyncio.gather(
+        _report(response, {**checks.serving, **checks.others}),
+        _read_revision(checks.schema_revision),
+    )
+    return FullHealthReport(**report.model_dump(), schema_revision=revision)
 
 
 @router.get("/health/ready", responses=_UNAVAILABLE)
@@ -117,6 +147,17 @@ async def ready(
     response: Response, checks: Annotated[HealthChecks, Depends(get_health_checks)]
 ) -> HealthReport:
     return await _report(response, checks.serving)
+
+
+async def _read_revision(
+    revision: Revision, check_timeout: float = CHECK_TIMEOUT_SECONDS
+) -> str | None:
+    try:
+        async with asyncio.timeout(check_timeout):
+            return await revision()
+    except Exception as error:
+        logger.warning("schema revision unreadable", extra={"error": type(error).__name__})
+        return None
 
 
 async def _report(response: Response, checks: Mapping[str, Check]) -> HealthReport:

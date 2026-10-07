@@ -33,6 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "tei_rerank": health.http_check(http, f"{settings.tei_rerank_url}/health"),
                 "ollama": health.http_check(http, f"{settings.ollama_url}/api/version"),
             },
+            schema_revision=health.schema_revision(engine),
         )
         try:
             yield

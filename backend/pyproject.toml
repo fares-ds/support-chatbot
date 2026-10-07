@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "Support Chatbot's API and worker"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "alembic>=1.20.0",
     "asyncpg>=0.31.0",
     "fastapi>=0.142.2",
     "httpx>=0.28.1",
@@ -39,7 +40,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF"]
 
 [tool.mypy]
 strict = true
-files = ["app", "tests"]
+files = ["app", "migrations", "tools", "tests"]
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
@@ -47,3 +48,10 @@ pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.alembic]
+# For `uv run alembic revision` while developing. Installs migrate with `python -m app.migrate`,
+# which needs no configuration file (ADR-0013).
+script_location = "%(here)s/migrations"
+file_template = "%%(rev)s_%%(slug)s"
+prepend_sys_path = ["."]
