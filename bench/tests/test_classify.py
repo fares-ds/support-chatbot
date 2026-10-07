@@ -106,3 +106,23 @@ async def test_canned_replies_use_the_widgets_language() -> None:
     )
 
     assert result.language == "ar"
+
+
+async def test_many_example_phrases_are_embedded_in_batches_tei_accepts() -> None:
+    """TEI refuses a request with more texts than its client batch limit, 32 by default."""
+    examples = {
+        category: [f"{category} {n}" for n in range(13)]
+        for category in ("on_topic", "off_topic", "human_request", "smalltalk")
+    }
+    sizes: list[int] = []
+
+    async def embed(texts: Sequence[str]) -> list[list[float]]:
+        sizes.append(len(texts))
+        if len(texts) > 32:
+            raise ValueError("422: batch size > max_client_batch_size")
+        return [[1.0, float(n)] for n in range(len(texts))]
+
+    await EmbeddingCheck.build(examples, yes=YES, embed=embed)
+
+    assert sum(sizes) == 52
+    assert max(sizes) <= 32
