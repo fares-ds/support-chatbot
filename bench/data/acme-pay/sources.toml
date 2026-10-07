@@ -1,0 +1,7 @@
+# Where acme-pay's knowledge base comes from. Acme Pay is a fictional Algerian fintech and
+# digital-goods business, like the beta's (PRD: Product). Every fact about it is invented, so an
+# answer model can only know them from the sources. Each article exists in French and in Arabic,
+# with the same sections, as a bilingual Algerian help centre would publish them.
+
+origin = "Written for the benchmark (#13). Acme Pay is fictional and its facts are invented."
+license = "Vendor-owned"

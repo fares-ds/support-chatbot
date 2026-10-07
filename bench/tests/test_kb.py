@@ -62,3 +62,20 @@ def test_rank_fusion_favours_what_both_searches_found() -> None:
 
 def test_rank_fusion_keeps_the_top_twenty() -> None:
     assert fuse([list(range(30))]) == list(range(20))
+
+
+def test_a_heading_after_a_skipped_level_is_the_sibling_of_its_own_level() -> None:
+    """Web pages skip levels: Service-Public.fr's tabs are level-5 headings under the title."""
+    markdown = (
+        f"# Card\n\n##### In France\n\n{words(80)}\n\n###### Where to call\n\n{words(80)}\n\n"
+        f"##### Abroad\n\n{words(80)}\n\n## Help\n\n{words(80)}\n"
+    )
+
+    chunks = chunk_markdown(markdown, language="en", estimator=LENGTHS, max_tokens=500)
+
+    assert [chunk.heading_path for chunk in chunks] == [
+        ("In France",),
+        ("In France", "Where to call"),
+        ("Abroad",),
+        ("Help",),
+    ]

@@ -1,0 +1,166 @@
+# Where gov-uk's knowledge base comes from. fetch.py fetches each page into kb/ with
+# trafilatura, as KB-8's web import will.
+
+license = "Open Government Licence v3.0"
+attribution = "Contains public sector information licensed under the Open Government Licence v3.0."
+retrieved = 2026-10-07
+
+[[documents]]
+file = "en-renew-driving-licence.md"
+origin = "https://www.gov.uk/renew-driving-licence"
+
+[[documents]]
+file = "en-renew-driving-licence-at-70.md"
+origin = "https://www.gov.uk/renew-driving-licence-at-70"
+
+[[documents]]
+file = "en-apply-first-provisional-driving-licence.md"
+origin = "https://www.gov.uk/apply-first-provisional-driving-licence"
+
+[[documents]]
+file = "en-change-name-driving-licence.md"
+origin = "https://www.gov.uk/change-name-driving-licence"
+
+[[documents]]
+file = "en-renew-photo-driving-licence.md"
+origin = "https://www.gov.uk/renew-photo-driving-licence"
+
+[[documents]]
+file = "en-driving-licence-fees.md"
+origin = "https://www.gov.uk/driving-licence-fees"
+
+[[documents]]
+file = "en-id-for-driving-licence.md"
+origin = "https://www.gov.uk/id-for-driving-licence"
+
+[[documents]]
+file = "en-exchange-paper-driving-licence.md"
+origin = "https://www.gov.uk/exchange-paper-driving-licence"
+
+[[documents]]
+file = "en-driving-eyesight-rules.md"
+origin = "https://www.gov.uk/driving-eyesight-rules"
+
+[[documents]]
+file = "en-vehicle-tax.md"
+origin = "https://www.gov.uk/vehicle-tax"
+
+[[documents]]
+file = "en-vehicle-tax-refund.md"
+origin = "https://www.gov.uk/vehicle-tax-refund"
+
+[[documents]]
+file = "en-vehicle-tax-advance.md"
+origin = "https://www.gov.uk/vehicle-tax-advance"
+
+[[documents]]
+file = "en-tax-vehicle-without-v11-reminder.md"
+origin = "https://www.gov.uk/tax-vehicle-without-v11-reminder"
+
+[[documents]]
+file = "en-vehicle-exempt-from-vehicle-tax.md"
+origin = "https://www.gov.uk/vehicle-exempt-from-vehicle-tax"
+
+[[documents]]
+file = "en-responsibilities-selling-vehicle.md"
+origin = "https://www.gov.uk/responsibilities-selling-vehicle"
+
+[[documents]]
+file = "en-checks-when-buying-a-used-car.md"
+origin = "https://www.gov.uk/checks-when-buying-a-used-car"
+
+[[documents]]
+file = "en-make-a-sorn.md"
+origin = "https://www.gov.uk/make-a-sorn"
+
+[[documents]]
+file = "en-speeding-penalties.md"
+origin = "https://www.gov.uk/speeding-penalties"
+
+[[documents]]
+file = "en-pay-dvla-fine.md"
+origin = "https://www.gov.uk/pay-dvla-fine"
+
+[[documents]]
+file = "en-appeal-dvla-fine.md"
+origin = "https://www.gov.uk/appeal-dvla-fine"
+
+[[documents]]
+file = "en-driving-fines-letters-you-dont-own-the-vehicle.md"
+origin = "https://www.gov.uk/driving-fines-letters-you-dont-own-the-vehicle"
+
+[[documents]]
+file = "en-written-off-vehicle.md"
+origin = "https://www.gov.uk/written-off-vehicle"
+
+[[documents]]
+file = "en-replace-a-driving-licence-apply-online.md"
+origin = "https://www.gov.uk/replace-a-driving-licence/apply-online"
+
+[[documents]]
+file = "en-replace-a-driving-licence-apply-by-phone-or-by-post.md"
+origin = "https://www.gov.uk/replace-a-driving-licence/apply-by-phone-or-by-post"
+
+[[documents]]
+file = "en-change-address-driving-licence-apply-online.md"
+origin = "https://www.gov.uk/change-address-driving-licence/apply-online"
+
+[[documents]]
+file = "en-change-address-driving-licence-apply-by-post.md"
+origin = "https://www.gov.uk/change-address-driving-licence/apply-by-post"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-setting-up.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/setting-up"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-renewing.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/renewing"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-change-address-name.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/change-address-name"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-change-payments.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/change-payments"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-change-accounts.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/change-accounts"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-payment-fails.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/payment-fails"
+
+[[documents]]
+file = "en-vehicle-tax-direct-debit-cancelling.md"
+origin = "https://www.gov.uk/vehicle-tax-direct-debit/cancelling"
+
+[[documents]]
+file = "en-penalty-points-endorsements-overview.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/overview"
+
+[[documents]]
+file = "en-penalty-points-endorsements-endorsement-codes-and-penalty-points.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/endorsement-codes-and-penalty-points"
+
+[[documents]]
+file = "en-penalty-points-endorsements-how-long-endorsements-stay-on-your-driving-licence.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/how-long-endorsements-stay-on-your-driving-licence"
+
+[[documents]]
+file = "en-penalty-points-endorsements-new-drivers.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/new-drivers"
+
+[[documents]]
+file = "en-penalty-points-endorsements-returning-your-driving-licence-for-endorsement.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/returning-your-driving-licence-for-endorsement"
+
+[[documents]]
+file = "en-penalty-points-endorsements-removing-expired-endorsements-from-your-driving-licence.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/removing-expired-endorsements-from-your-driving-licence"
+
+[[documents]]
+file = "en-penalty-points-endorsements-how-to-check-your-endorsement-details.md"
+origin = "https://www.gov.uk/penalty-points-endorsements/how-to-check-your-endorsement-details"

@@ -57,7 +57,7 @@ async def test_the_knowledge_base_finds_the_chunk_that_answers(
     embedder = Tei(http, stack["tei_embed_url"])
     chunks = [
         chunk
-        for document in load_documents(Path("data/kb"))
+        for document in load_documents(Path("data/acme-pay/kb"))
         for chunk in chunk_markdown(
             document.markdown, language=document.language, estimator=CHUNKING
         )
@@ -72,12 +72,12 @@ async def test_the_knowledge_base_finds_the_chunk_that_answers(
     )
     # The next benchmark run sees another fingerprint, and loads the knowledge base again.
     await store.load(chunks, embed=embedder.embed, model="test", fingerprint="integration test")
-    question = "Comment envoyer du crédit à un autre numéro Acme Mobile ?"
+    question = "Comment parrainer un proche pour recevoir 200 DA ?"
     [vector] = await embedder.embed([question])
 
     found = fused(await store.search(vector, question))
 
-    assert "Recharges et crédit" in [candidate.title for candidate in found[:3]]
+    assert "Parrainage" in [candidate.title for candidate in found[:3]]
 
 
 async def test_every_container_of_the_stack_reports_its_memory(docker: Docker) -> None:

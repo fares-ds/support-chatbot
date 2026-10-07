@@ -29,9 +29,12 @@ Start the stack first: from the repository root, `docker compose up --build --de
 
 ```sh
 docker compose run --rm bench run configs/dev.toml
+docker compose run --rm bench run configs/dev.toml --dataset data/gov-uk
 docker compose run --rm bench run configs/dev.toml --concurrency 1,2,4 --turns 20 --label quiet-hour
 docker compose run --rm bench compare results/A.json results/B.json
 ```
+
+A run uses one business's dataset, as an install serves one business ([ADR-0006](../docs/adr/0006-one-install-per-business.md)): the configuration's, or `--dataset`'s. Switching datasets reloads the knowledge base.
 
 The harness runs in a container on the stack's internal network, where it reaches TEI, Ollama and Postgres as the API does.
 
@@ -45,7 +48,7 @@ The harness runs in a container on the stack's internal network, where it reache
 
 `configs/dev.toml` uses the Mac's own Ollama, through `SC_OLLAMA_URL` in the root `.env`, with its cloud models. TEI runs the development models from `deploy/dev.env`.
 
-These runs check the wiring and the prompts. Cloud models say nothing about CPU speed, and the development models say little about retrieval quality. Send only synthetic data, such as `data/`, to cloud models.
+These runs check the wiring and the prompts. Cloud models say nothing about CPU speed, and the development models say little about retrieval quality. Send cloud models only synthetic or public data, such as `data/`.
 
 A run takes about a minute. `configs/dev-embedding.toml` runs the embedding check instead of a small model.
 
@@ -83,12 +86,15 @@ concurrency = [1]
 turns = 20                            # per level; p95 means little below about 20
 warmup = 2                            # turns before the first level, left out
 
+[data]
+dataset = "data/acme-pay"             # one business's directory; --dataset overrides it
+
 [stack]
 project = "support-chatbot"
 extra_containers = []                 # also measure these containers, outside the project
 ```
 
-An external provider's model takes its API key from the environment, which `docker compose run` passes through by name: `docker compose run --rm -e OPENAI_API_KEY bench run configs/external.toml`. Send it only synthetic data, such as `data/`.
+An external provider's model takes its API key from the environment, which `docker compose run` passes through by name: `docker compose run --rm -e OPENAI_API_KEY bench run configs/external.toml`. Send it only synthetic or public data, such as `data/`.
 
 The embedding model and the reranker are whatever the stack's TEI containers serve. The vendor sets them in the install's environment ([ADR-0030](../docs/adr/0030-vendor-sets-local-embedding-and-rerank-models.md)), and the results name them.
 
@@ -98,7 +104,7 @@ The harness gives each Ollama model a context window (`num_ctx`) that fits its p
 
 Each run writes two files to `results/`, which git ignores; commit a run only on purpose.
 
-- **`<time>-<name>.json`** holds everything: the host, the models, the calibration, the budgets, and per concurrency level:
+- **`<time>-<name>.json`** holds everything: the host, the dataset, the models, the calibration, the budgets, and per concurrency level:
   - the statistics;
   - each container's peak memory and its mean and peak CPU;
   - every turn, with its timings, tokens, category, search query, sources and answer.
@@ -120,13 +126,36 @@ PR #21 has the first numbers: the Mac with cloud models, and CI's x86-64 runner 
 
 ## Data
 
-`data/` holds placeholders written for #12 about a fictional operator, Acme Mobile:
+The samples the bake-offs score against (#13), one directory per business in `data/`. The test set comes from the live beta ([ADR-0022](../docs/adr/0022-eval-data-from-the-live-beta.md)); these vendor-made samples only choose M0's defaults.
 
-- a knowledge base of 8 documents in English, French and Arabic, which make 19 chunks;
-- 20 turns in English, French, Arabic and Darija (in Latin and in Arabic script);
-- the embedding check's example phrases.
+| Dataset | Business | Knowledge base | Samples |
+| --- | --- | --- | --- |
+| `acme-pay` | A fictional Algerian fintech and digital-goods business, like the beta's | 11 help articles, each in French and Arabic | Arabic, and Darija in Latin and in Arabic script; a few in French and English |
+| `gov-uk` | GOV.UK's driving and vehicles pages, from DVLA | 40 public pages, under the Open Government Licence v3.0 | English |
+| `service-public` | Service-Public.fr's money and consumer guides | 32 public pages, under Licence Ouverte 2.0 | French |
 
-The Arabic and Darija ones are unreviewed. #13 replaces them with reviewed datasets.
+The fictional business tests whether a model keeps to its sources, since no model knows its facts. The public pages test models that may already know the answers, and come with real pages' untidy markup.
+
+Each directory holds:
+
+- **`turns.toml`:** the business's name and description, then turns. Each turn has an `id`, a `language` (en, fr, ar or darija), a `message` and Gate 1's expected `category`. It may have an `interface_language`, a `history`, `offered_person`, `cases` and a `note`.
+  - An on-topic turn expects an `answer`, with the `facts` a correct answer states (in English) and its `sources`, or a `handoff` when the knowledge base cannot answer it.
+  - A source reads `file.md#Heading > Below it`, or `file.md` for anywhere in the document. ` | ` separates other places that state the same facts, such as a translation.
+  - `cases` marks what else a turn tests: `needs_history`, `yes_after_offer` or `injection`.
+- **`kb/<language>-<topic>.md`:** the knowledge base, in Markdown.
+- **`sources.toml`:** each document's origin and license. Top-level keys apply to every document; a `[[documents]]` entry sets them for one file.
+- **`examples.toml`:** the embedding check's example phrases per category, and its words for yes. None may repeat a turn's message.
+
+Results are reported per group: en, fr, ar, darija-latin and darija-arabic. A Darija message's group is the script most of its letters are in; one without letters goes by the widget's language.
+
+The loader checks each dataset when a run starts: every turn's rules, every source against the documents' headings, every document's origin and license, and the example phrases against the turns. `tests/test_committed_data.py` checks #13's minimums on the committed data: at least 25 samples per category and 30 answerable and 10 unanswerable questions in each group, plus cases that need the history, a yes after an offer of a person, and injections.
+
+**The public pages** are fetched with trafilatura, as KB-8's web import will: `uv run data/fetch.py data/gov-uk`. Pages change, so review the diff before committing: questions and their sources may need to follow. Service-Public.fr's pages show what that import will meet:
+- Glossary tooltips leave ": titleContent" in the text.
+- Headings skip levels, and some text lands under a heading it does not belong to.
+- Each page ends with feedback-form sections.
+
+Sources name the section that text lands in after chunking, even when its heading reads oddly.
 
 ## Development
 

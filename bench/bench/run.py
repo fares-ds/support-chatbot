@@ -20,7 +20,7 @@ import httpx
 from bench import METHOD_VERSION
 from bench.classify import EmbeddingCheck
 from bench.config import Config
-from bench.data import Sample, load_documents, load_examples, load_turns
+from bench.data import Sample, load_dataset
 from bench.kb import Chunk, chunk_markdown
 from bench.llm import ModelClassifier, ModelSettings, calibrate, prompt_tokens
 from bench.pipeline import Pipeline, PromptCosts
@@ -175,10 +175,9 @@ async def _run(
     embed_info, rerank_info = await embedder.info(), await reranker.info()
     query_prefix, document_prefix = _prefixes(embed_info["model_id"])
 
-    data = config.data
-    conversation = load_turns(data.turns)
-    samples = _interleaved(conversation.samples)
-    documents = load_documents(data.kb)
+    dataset = load_dataset(config.data.dataset)
+    samples = _interleaved(dataset.samples)
+    documents = dataset.documents
     chunks = [
         chunk
         for document in documents
@@ -225,10 +224,10 @@ async def _run(
     answer, classifier_settings = _context_windows(answer, classifier_settings, budgets)
 
     logger.info("Measuring how the models count tokens")
-    texts = _calibration_texts(chunks, conversation.samples)
+    texts = _calibration_texts(chunks, dataset.samples)
     answer_estimator = await calibrate(answer, texts)
     skeleton = answer_prompt(
-        business=conversation.business,
+        business=dataset.business,
         sources=[],
         history=[],
         message="",
@@ -248,22 +247,21 @@ async def _run(
             else await calibrate(classifier_settings, texts)
         )
         empty = {
-            "business_description": conversation.business.description,
+            "business_description": dataset.business.description,
             "history": "",
             "message": "",
         }
         classify_fixed = await prompt_tokens(classifier_settings, model_classifier.messages(empty))
         classifier = model_classifier
     else:
-        examples, yes = load_examples(data.examples)
         classifier = await EmbeddingCheck.build(
-            examples, yes=yes, embed=embed_query, margin=config.classifier.margin
+            dataset.examples, yes=dataset.yes, embed=embed_query, margin=config.classifier.margin
         )
         classify_estimator, classify_fixed = answer_estimator, 0
 
-    pools = _filler_pools(conversation.samples, chunks)
+    pools = _filler_pools(dataset.samples, chunks)
     pipeline = Pipeline(
-        business=conversation.business,
+        business=dataset.business,
         budgets=budgets,
         classifier=classifier,
         embed_query=embed_query,
@@ -278,6 +276,12 @@ async def _run(
     await idle.sample()
     results: dict[str, Any] = {
         **header,
+        "dataset": {
+            "name": dataset.name,
+            "samples": len(dataset.samples),
+            "documents": len(documents),
+            "chunks": len(chunks),
+        },
         "models": {
             "classifier": (
                 f"{classifier_settings.model} (DSPy)"
@@ -465,11 +469,18 @@ def _interleaved(samples: Sequence[Sample]) -> list[Sample]:
 
 
 def _filler_pools(samples: Sequence[Sample], chunks: Sequence[Chunk]) -> dict[str, list[Message]]:
-    """Earlier exchanges to fill histories with, per language: other customers' questions, and
-    answers made of the knowledge base's text, as an AI assistant's answers would be."""
+    """Earlier exchanges to fill histories with, per language: other customers' on-topic
+    questions, and answers made of the knowledge base's text, as an AI assistant's answers would
+    be."""
+    questions_by_language: dict[str, list[str]] = {}
+    for sample in samples:
+        if sample.category == "on_topic":
+            questions_by_language.setdefault(sample.language, []).append(sample.message)
     pools = {}
     for language in {sample.language for sample in samples}:
-        questions = [sample.message for sample in samples if sample.language == language]
+        questions = questions_by_language.get(language) or [
+            sample.message for sample in samples if sample.language == language
+        ]
         answers = [_prose(c.text) for c in chunks if c.language == language] or [
             _prose(c.text) for c in chunks
         ]

@@ -49,11 +49,8 @@ class Run(_Section):
 
 
 class Data(_Section):
-    """Paths relative to the bench directory."""
-
-    kb: Path = Path("data/kb")
-    turns: Path = Path("data/turns.toml")
-    examples: Path = Path("data/examples.toml")
+    dataset: Path = Path("data/acme-pay")
+    """One business's directory in data/, relative to the bench directory."""
 
 
 class Stack(_Section):
@@ -73,6 +70,9 @@ class Config(_Section):
     run: Run = Field(default_factory=Run)
     data: Data = Field(default_factory=Data)
     stack: Stack = Field(default_factory=Stack)
+
+    def with_dataset(self, dataset: Path) -> Self:
+        return self.model_copy(update={"data": Data(dataset=dataset)})
 
 
 def load_config(path: Path) -> Config:
