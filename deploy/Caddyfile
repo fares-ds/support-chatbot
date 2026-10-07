@@ -1,0 +1,16 @@
+# Caddy serves the install's domain over HTTPS, with automatic certificates (SEC-8).
+# For "localhost" it issues certificates from its own local certificate authority.
+
+{$SC_DOMAIN} {
+	handle /api/* {
+		reverse_proxy api:8000 {
+			# One ID per request, carried into the API's logs.
+			header_up X-Request-ID {http.request.uuid}
+		}
+	}
+
+	# The dashboard and the widget arrive in M1.
+	handle {
+		respond "Support Chatbot" 200
+	}
+}

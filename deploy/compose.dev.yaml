@@ -1,0 +1,7 @@
+# Development only: builds the backend from source. The compose.yaml at the repository root
+# merges it over compose.yaml. It is not part of the install bundle.
+
+services:
+  api:
+    build: ../backend
+    pull_policy: build

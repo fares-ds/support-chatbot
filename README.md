@@ -15,7 +15,16 @@ Proprietary, not open source ([ADR-0010](docs/adr/0010-proprietary-closed-source
 | `backend/` | FastAPI API, Celery worker and Alembic migrations |
 | `frontend/` | Dashboard, widget, widget loader and the generated API client |
 | `deploy/` | The install bundle: Compose file, Caddyfile, environment template and server CLI |
+| `compose.yaml` | The development stack: the install bundle's Compose file, with the backend built from source |
 | `bench/` | The M0 benchmark |
+
+## Development
+
+You need Docker and [uv](https://docs.astral.sh/uv/).
+
+- `docker compose up --build` starts the stack on https://localhost with the development values in `deploy/dev.env`.
+- `curl -k https://localhost/api/health` reports whether the API reaches Postgres and Valkey. Caddy signs `localhost` with its own certificate authority; to verify instead of passing `-k`, copy its root certificate with `docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .` and pass `--cacert root.crt`.
+- In `backend/`: `uv run pytest`, `uv run ruff check`, `uv run ruff format` and `uv run mypy`. CI runs the same checks, plus the stack, on every pull request.
 
 ## Workflow
 

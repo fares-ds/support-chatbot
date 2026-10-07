@@ -1,0 +1,44 @@
+"""The FastAPI application. Every route lives under /api; Caddy serves everything else."""
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from app import health
+from app.config import Settings, get_settings
+from app.request_id import RequestIdMiddleware
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        engine = create_async_engine(
+            settings.database_url, pool_pre_ping=True, connect_args={"timeout": 5}
+        )
+        valkey = Redis.from_url(settings.valkey_url, socket_connect_timeout=2)
+        app.state.health_checks = {
+            "postgres": health.postgres_check(engine),
+            "valkey": health.valkey_check(valkey),
+        }
+        try:
+            yield
+        finally:
+            await valkey.aclose()
+            await engine.dispose()
+
+    development = settings.environment == "development"
+    app = FastAPI(
+        title="Support Chatbot API",
+        lifespan=lifespan,
+        openapi_url="/api/openapi.json" if development else None,
+        docs_url="/api/docs" if development else None,
+        redoc_url=None,
+    )
+    app.add_middleware(RequestIdMiddleware)
+    app.include_router(health.router, prefix="/api")
+    return app
