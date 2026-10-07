@@ -103,11 +103,23 @@ services:
     logging: *logging
 
   # One model per TEI container (ADR-0028). An ARM64 server sets SC_TEI_TAG=cpu-arm64-1.9.4.
-  # --auto-truncate cuts an input longer than the model's limit instead of refusing it.
+  # Memory, measured on TEI 1.9.4 (#4):
+  # - TEI warms up with a full batch of max-batch-tokens. With --auto-truncate that is also the
+  #   longest input. bge-m3 and bge-reranker-v2-m3 accept 8,192 tokens, and warming up at that
+  #   length ran a 7 GB machine out of memory. Chunks are under 600 tokens, so 2,048 is plenty;
+  #   longer inputs are cut, not refused.
+  # - Each tokenization worker holds its own copy of the tokenizer: about 230 MB for these
+  #   multilingual models. TEI starts one per CPU by default, so we set 2.
+  # The M0 benchmark tunes both values.
   tei-embed:
     image: ghcr.io/huggingface/text-embeddings-inference:${SC_TEI_TAG:-cpu-1.9.4}
     restart: unless-stopped
-    command: ["--model-id", "${SC_EMBEDDING_MODEL:-BAAI/bge-m3}", "--auto-truncate", "--json-output"]
+    command:
+      - --model-id=${SC_EMBEDDING_MODEL:-BAAI/bge-m3}
+      - --max-batch-tokens=${SC_TEI_MAX_BATCH_TOKENS:-2048}
+      - --tokenization-workers=${SC_TEI_TOKENIZATION_WORKERS:-2}
+      - --auto-truncate
+      - --json-output
     volumes:
       - tei_embed_models:/data
     networks: [backend]
@@ -124,7 +136,12 @@ services:
   tei-rerank:
     image: ghcr.io/huggingface/text-embeddings-inference:${SC_TEI_TAG:-cpu-1.9.4}
     restart: unless-stopped
-    command: ["--model-id", "${SC_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}", "--auto-truncate", "--json-output"]
+    command:
+      - --model-id=${SC_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      - --max-batch-tokens=${SC_TEI_MAX_BATCH_TOKENS:-2048}
+      - --tokenization-workers=${SC_TEI_TOKENIZATION_WORKERS:-2}
+      - --auto-truncate
+      - --json-output
     volumes:
       - tei_rerank_models:/data
     networks: [backend]
