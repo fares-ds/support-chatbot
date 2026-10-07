@@ -12,11 +12,11 @@ Proprietary, not open source ([ADR-0010](docs/adr/0010-proprietary-closed-source
 | [docs/adr/](docs/adr/) | Architecture decision records |
 | [docs/tech-stack.md](docs/tech-stack.md) | The stack and its configuration rules |
 | [docs/glossary.md](docs/glossary.md) | The words to use in code and screens |
-| `backend/` | FastAPI API, Celery worker and Alembic migrations |
-| `frontend/` | Dashboard, widget, widget loader and the generated API client |
-| `deploy/` | The install bundle: Compose file, Caddyfile, environment template and server CLI |
+| `backend/` | The FastAPI API. The Celery worker and Alembic migrations come later in M0. |
+| `frontend/` | Not started. The generated API client comes in M0; the dashboard, widget and widget loader in M1. |
+| `deploy/` | The install bundle: the Compose file and Caddyfile so far. The environment template and server CLI come later in M0. |
 | `compose.yaml` | The development stack: the install bundle's Compose file, with the backend built from source |
-| `bench/` | The M0 benchmark |
+| [bench/](bench/) | The M0 benchmark harness |
 
 ## Development
 

@@ -114,6 +114,8 @@ Token counts are the models' own. Prompts are built to estimates calibrated on t
 
 With the PRD's part caps, an answer prompt reaches about 4,300 tokens with a short customer message: about 250 fixed, 2,500 of sources and 1,500 of history. The 4,500 total binds only for a long message, or when the total is set lower than the parts.
 
+PR #21 has the first numbers: the Mac with cloud models, and CI's x86-64 runner with Qwen2.5 0.5B.
+
 `compare` prints several runs side by side, matched by concurrency level. `METHOD_VERSION` in `bench/__init__.py` changes when results stop being comparable with earlier ones.
 
 ## Data
@@ -130,4 +132,4 @@ The Arabic and Darija ones are unreviewed. #13 replaces them with reviewed datas
 
 - In this directory: `uv run pytest`, `uv run ruff check`, `uv run ruff format` and `uv run mypy`.
 - The tests marked `stack` need a running stack, and run in the container: `docker compose run --rm --entrypoint pytest bench -m stack`.
-- CI's `bench.yml` runs both when this directory changes, then a short run on x86-64 with Qwen2.5 0.5B in the stack's own Ollama.
+- CI's `bench.yml` runs both when this directory changes, then a short run on x86-64 with Qwen2.5 0.5B in the stack's own Ollama. A CI run shows its summaries on the run's page, and keeps its results files as the `bench-results` artifact for 30 days.
