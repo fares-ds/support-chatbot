@@ -39,6 +39,8 @@ jobs:
         run: uv run mypy
       - name: Tests
         run: uv run pytest
+      - name: Migration rules
+        run: uv run python -m tools.migration_rules migrations/versions
 
   stack:
     name: Compose stack
@@ -57,6 +59,15 @@ jobs:
           df -h /
       - name: Start the stack
         run: docker compose up --build --detach --wait --wait-timeout 900
+      - name: The migration job ran before the API
+        run: |
+          docker compose ps --all --format '{{.Service}} {{.State}} {{.ExitCode}}' migrate | tee "$RUNNER_TEMP/migrate.txt"
+          test "$(cat "$RUNNER_TEMP/migrate.txt")" = "migrate exited 0"
+          docker compose logs --no-color api | grep -q alembic && { echo "The API migrated on startup"; exit 1; } || true
+          migrated=$(docker inspect --format '{{.State.FinishedAt}}' "$(docker compose ps --all --quiet migrate)")
+          started=$(docker inspect --format '{{.State.StartedAt}}' "$(docker compose ps --quiet api)")
+          echo "migrate finished $migrated; api started $started"
+          test "$(date -d "$migrated" +%s%N)" -le "$(date -d "$started" +%s%N)"
       - name: Health through Caddy over HTTPS
         run: |
           for attempt in 1 2 3 4 5; do
@@ -68,6 +79,20 @@ jobs:
           jq --exit-status '.status == "ok" and .checks == {
             "postgres": "ok", "valkey": "ok", "tei_embed": "ok", "tei_rerank": "ok", "ollama": "ok"
           }' "$RUNNER_TEMP/health.json"
+          # Revisions are numbered, so the newest file is the head.
+          head=$(ls backend/migrations/versions | grep -E '^[0-9]+_' | sort | tail -n 1 | cut -d _ -f 1)
+          jq --exit-status --arg head "$head" '.schema_revision == $head' "$RUNNER_TEMP/health.json"
+      - name: Migrating again changes nothing
+        run: |
+          schema() {
+            docker compose exec -T postgres pg_dump --schema-only --username=sc support_chatbot \
+              | grep -v '^\\\(un\)\?restrict '
+          }
+          schema > "$RUNNER_TEMP/schema-before.sql"
+          docker compose run --rm migrate
+          schema > "$RUNNER_TEMP/schema-after.sql"
+          diff "$RUNNER_TEMP/schema-before.sql" "$RUNNER_TEMP/schema-after.sql"
+          grep -q 'CREATE EXTENSION IF NOT EXISTS vector' "$RUNNER_TEMP/schema-after.sql"
       - name: Only Caddy publishes ports
         run: |
           published=$(docker compose ps --format '{{.Service}} {{.Ports}}' | grep -- '->' | cut -d ' ' -f 1 | sort -u)

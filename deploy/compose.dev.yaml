@@ -6,6 +6,11 @@ services:
     build: ../backend
     pull_policy: build
 
+  # The image the api service builds. Building it here too would label it with both services,
+  # and each build would recreate the other's container.
+  migrate:
+    pull_policy: never
+
   # The TEI image that matches this machine's CPU, natively. One tag per service: Compose labels
   # each build with its service, so a shared tag would flip between them and recreate containers.
   tei-embed:
