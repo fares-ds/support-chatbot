@@ -1,12 +1,14 @@
 name: Benchmark harness
 
 # Checks the M0 benchmark harness (#12), then runs it briefly on x86-64 against the stack, with
-# a small model in the stack's own Ollama. It runs when bench/ changes, or by hand.
+# a small model in the stack's own Ollama. It runs when bench/ changes, except its README, or by
+# hand.
 
 on:
   pull_request:
     paths:
       - bench/**
+      - "!bench/README.md"
       - .github/workflows/bench.yml
   workflow_dispatch:
 
