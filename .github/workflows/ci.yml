@@ -28,7 +28,7 @@ jobs:
           version: "0.12.23"
           working-directory: backend
           enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+          cache-dependency-glob: uv.lock
       - name: Install
         run: uv sync --locked
       - name: Lint
