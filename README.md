@@ -26,6 +26,7 @@ You need Docker and [uv](https://docs.astral.sh/uv/).
 - The stack's own Ollama is left out in development, because its image is about 9 GB. Either point the API at an Ollama that already runs, with a `.env` file at the repository root holding `SC_OLLAMA_URL=http://host.docker.internal:11434`, or run the stack's own with `COMPOSE_PROFILES=ollama`, as CI does.
 - `curl -k https://localhost/api/health` reports each service the install runs; `/api/health/ready` reports only what the API needs to serve, Postgres and Valkey. Caddy signs `localhost` with its own certificate authority; to verify instead of passing `-k`, copy its root certificate with `docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .` and pass `--cacert root.crt`.
 - In `backend/`: `uv run pytest`, `uv run ruff check`, `uv run ruff format` and `uv run mypy`. CI runs the same checks, plus the stack, on every pull request.
+- The M0 benchmark times the AI pipeline against the running stack: see [bench/README.md](bench/README.md).
 
 ## Workflow
 

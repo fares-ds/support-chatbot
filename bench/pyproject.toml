@@ -1,0 +1,53 @@
+[project]
+name = "support-chatbot-bench"
+version = "0.0.0"
+description = "The M0 benchmark harness: times the AI pipeline against a running stack"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "asyncpg>=0.32.0",
+    "dspy>=3.4.0",
+    "httpx>=0.28.1",
+    "numpy>=2.5.3",
+    "pydantic>=2.13.5",
+]
+
+[dependency-groups]
+dev = [
+    "asyncpg-stubs>=0.32.0",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.10",
+]
+
+[tool.uv]
+# A tool, not a library: uv installs the dependencies only, and the image copies bench/.
+package = false
+required-version = ">=0.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+files = ["bench", "tests"]
+
+[[tool.mypy.overrides]]
+# DSPy ships without type information.
+module = ["dspy", "dspy.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["stack: needs a running stack; run in the bench container with -m stack"]
+addopts = "-m 'not stack'"

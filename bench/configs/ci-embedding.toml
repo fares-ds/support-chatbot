@@ -1,0 +1,14 @@
+# As ci.toml, with the embedding check as the classifier.
+
+name = "ci-embedding"
+
+[classifier]
+mode = "embedding"
+
+[answer]
+model = "ollama_chat/qwen2.5:0.5b"
+
+[run]
+concurrency = [1]
+turns = 2
+warmup = 1

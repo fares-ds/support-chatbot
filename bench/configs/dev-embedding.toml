@@ -1,0 +1,16 @@
+# As dev.toml, with the embedding check on tei-embed as the classifier (AI-8, ADR-0025)
+# instead of a small model.
+
+name = "dev-embedding"
+
+[classifier]
+mode = "embedding"
+
+[answer]
+model = "ollama_chat/gemma4:cloud"
+reasoning_effort = "none"
+
+[run]
+concurrency = [1, 2]
+turns = 6
+warmup = 2
