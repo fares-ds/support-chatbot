@@ -93,8 +93,8 @@ A TEI container loads one model, so embeddings and reranking take one container 
 | Local LLMs | Ollama on CPU. M0 picks the default answer model, in the 4–7B class. |
 | GPU hosts | Any OpenAI-compatible endpoint, such as vLLM, set in the model settings. No vLLM container ships. |
 | External providers | Any provider LiteLLM supports, with the Owner's API key, stored encrypted |
-| Embeddings and reranking | TEI, one container each, or an external API. First candidates are bge-m3 and bge-reranker-v2-m3; M0 confirms they run on TEI's CPU image. |
-| Who picks models | The vendor sets each install's starting models; the Owner may change any of them, at their own risk ([ADR-0011](adr/0011-cpu-first-models.md)) |
+| Embeddings and reranking | TEI, one container each, running the model the vendor sets; or an external API. First candidates are bge-m3 and bge-reranker-v2-m3; M0 confirms they run on TEI's CPU image. |
+| Who picks models | The vendor sets each install's starting models, and its local embedding model and reranker. The Owner may change the classifying and answering models, and switch embeddings and reranking between the local model and an external API, at their own risk ([ADR-0011](adr/0011-cpu-first-models.md), [ADR-0030](adr/0030-vendor-sets-local-embedding-and-rerank-models.md)) |
 | Relevance thresholds | Calibrated per model. An uncalibrated model gets no relevance cut-off and is marked "uncalibrated" in the dashboard ([ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). |
 
 ## Data

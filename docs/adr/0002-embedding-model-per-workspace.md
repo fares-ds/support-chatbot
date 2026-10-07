@@ -1,6 +1,6 @@
 # ADR-0002: The embedding model is chosen per workspace
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0030](0030-vendor-sets-local-embedding-and-rerank-models.md)
 - Date: 2026-10-05
 - Deciders: Fares
 

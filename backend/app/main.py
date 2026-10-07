@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -21,13 +22,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.database_url, pool_pre_ping=True, connect_args={"timeout": 5}
         )
         valkey = Redis.from_url(settings.valkey_url, socket_connect_timeout=2)
-        app.state.health_checks = {
-            "postgres": health.postgres_check(engine),
-            "valkey": health.valkey_check(valkey),
-        }
+        http = httpx.AsyncClient()
+        app.state.health_checks = health.HealthChecks(
+            serving={
+                "postgres": health.postgres_check(engine),
+                "valkey": health.valkey_check(valkey),
+            },
+            others={
+                "tei_embed": health.http_check(http, f"{settings.tei_embed_url}/health"),
+                "tei_rerank": health.http_check(http, f"{settings.tei_rerank_url}/health"),
+                "ollama": health.http_check(http, f"{settings.ollama_url}/api/version"),
+            },
+        )
         try:
             yield
         finally:
+            await http.aclose()
             await valkey.aclose()
             await engine.dispose()
 

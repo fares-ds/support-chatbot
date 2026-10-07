@@ -33,3 +33,9 @@ def test_reads_sc_variables_from_the_environment(monkeypatch: pytest.MonkeyPatch
 
     assert settings.postgres_password.get_secret_value() == "from-env"
     assert settings.environment == "development"
+
+
+def test_service_urls_lose_a_trailing_slash() -> None:
+    settings = Settings(postgres_password="test", ollama_url="http://host.docker.internal:11434/")
+
+    assert settings.ollama_url == "http://host.docker.internal:11434"

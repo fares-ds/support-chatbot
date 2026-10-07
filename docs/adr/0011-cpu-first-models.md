@@ -1,6 +1,6 @@
 # ADR-0011: Installs run on CPU; larger models go through external providers
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0030](0030-vendor-sets-local-embedding-and-rerank-models.md)
 - Date: 2026-10-05
 - Deciders: Fares
 
