@@ -1,0 +1,17 @@
+# CI's short run on its x86-64 runner, with a small model in the stack's own Ollama. It checks
+# the harness end to end on x86-64; its numbers are a 2-vCPU runner's with a 0.5B model, not a
+# server's.
+
+name = "ci"
+
+[classifier]
+mode = "model"
+model = "ollama_chat/qwen2.5:0.5b"
+
+[answer]
+model = "ollama_chat/qwen2.5:0.5b"
+
+[run]
+concurrency = [1, 2]
+turns = 2
+warmup = 1

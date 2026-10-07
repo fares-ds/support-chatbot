@@ -1,0 +1,28 @@
+# The benchmark harness (#12), next to a running stack. From this directory:
+#
+#   docker compose run --rm bench run configs/dev.toml
+#
+# It joins the stack's internal network, so it reaches TEI, Ollama and Postgres as the API
+# does. Through the Docker socket it reads each container's memory and CPU, and the stack's
+# settings from its api container. The socket gives it root on the host, so run it only where
+# you would run docker yourself.
+
+name: support-chatbot-bench
+
+services:
+  bench:
+    # Built when missing. The code comes from the mount below, so only a dependency change
+    # needs `docker compose build`.
+    build: .
+    image: support-chatbot-bench:dev
+    volumes:
+      # Code, configurations, data and results come from this directory.
+      - .:/bench
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [stack]
+
+networks:
+  stack:
+    # The stack's backend network: its project is support-chatbot in development and on servers.
+    name: support-chatbot_backend
+    external: true

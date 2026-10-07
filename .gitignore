@@ -17,6 +17,9 @@ dist/
 *.tsbuildinfo
 .pnpm-store/
 
+# Benchmark results, kept locally; commit one only on purpose
+bench/results/
+
 # Secrets and local environment files
 .env
 .env.*

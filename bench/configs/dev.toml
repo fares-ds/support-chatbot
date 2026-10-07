@@ -1,0 +1,19 @@
+# The vendor's Mac. The LLM steps run on Ollama cloud models through SC_OLLAMA_URL, so they test
+# the wiring and say nothing about CPU speed; TEI runs the development models from
+# deploy/dev.env. A short run takes a few minutes.
+
+name = "dev"
+
+[classifier]
+mode = "model"
+model = "ollama_chat/gemma4:cloud"
+reasoning_effort = "none"
+
+[answer]
+model = "ollama_chat/gemma4:cloud"
+reasoning_effort = "none"
+
+[run]
+concurrency = [1, 2]
+turns = 6
+warmup = 2

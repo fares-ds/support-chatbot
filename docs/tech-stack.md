@@ -2,7 +2,7 @@
 
 What every V1 install runs, why each piece is there, and the rules for configuring it. The decisions are recorded in [ADR-0014](adr/0014-v1-tech-stack.md), amended by [ADR-0024](adr/0024-stack-review-corrections.md) and [ADR-0028](adr/0028-two-tei-containers.md) and refined by [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md). The API client is in [ADR-0026](adr/0026-typed-api-client-from-openapi.md), the repository layout in [ADR-0027](adr/0027-repository-layout-and-git-workflow.md), and the server CLI in [ADR-0029](adr/0029-server-cli-in-standard-library-python.md). If this page and an ADR disagree, the ADR wins. Requirements (IDs such as AI-8 or SEC-13) live in the [PRD](prd.md).
 
-Updated 2026-10-06.
+Updated 2026-10-07.
 
 ## At a glance
 
@@ -88,9 +88,9 @@ A TEI container loads one model, so embeddings and reranking take one container 
 | --- | --- |
 | Provider interface | The LiteLLM library. Every model call goes through it ([ADR-0001](adr/0001-model-providers-behind-one-interface.md)). |
 | Answers | Generated and streamed through LiteLLM directly, not through DSPy. The server holds back the first 16 tokens to catch the abstain token. |
-| Classification, full mode | A DSPy module with structured output: category, standalone query, language |
+| Classification, full mode | A DSPy module with structured output: category, standalone query, language. DSPy sends no JSON schema for models LiteLLM does not list, such as Ollama's, so the module passes one (`response_format`). |
 | Classification, CPU mode | An embedding-similarity check on TEI, or a small model; M0 picks. With the embedding check, follow-up questions, "yes" after an offer of a person, and canned-reply language follow fixed rules (AI-8, [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). |
-| Local LLMs | Ollama on CPU. M0 picks the default answer model, in the 4–7B class. |
+| Local LLMs | Ollama on CPU. M0 picks the default answer model, in the 4–7B class. Every request sets the context window (`num_ctx`) to fit its step's prompt and reply; otherwise Ollama uses its default size and cuts a longer prompt. A model that serves two steps gets one size, since Ollama reloads a model whose size changes. |
 | GPU hosts | Any OpenAI-compatible endpoint, such as vLLM, set in the model settings. No vLLM container ships. |
 | External providers | Any provider LiteLLM supports, with the Owner's API key, stored encrypted |
 | Embeddings and reranking | TEI, one container each, running the model the vendor sets; or an external API. First candidates are bge-m3 and bge-reranker-v2-m3; M0 confirms they run on TEI's CPU image. |
