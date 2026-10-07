@@ -1,4 +1,4 @@
-"""The container's health check: exits 0 when the API reports healthy, 1 otherwise.
+"""The container's health check: exits 0 when the API is ready to serve, 1 otherwise.
 
 Standard library only, so the check stays cheap when Docker runs it every 10 seconds.
 """
@@ -6,7 +6,7 @@ Standard library only, so the check stays cheap when Docker runs it every 10 sec
 import sys
 import urllib.request
 
-URL = "http://127.0.0.1:8000/api/health"
+URL = "http://127.0.0.1:8000/api/health/ready"
 
 
 def main() -> int:

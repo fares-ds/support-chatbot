@@ -46,13 +46,16 @@ services:
     environment:
       SC_ENVIRONMENT: ${SC_ENVIRONMENT:-production}
       SC_POSTGRES_PASSWORD: ${SC_POSTGRES_PASSWORD:?SC_POSTGRES_PASSWORD is not set}
+      SC_OLLAMA_URL: ${SC_OLLAMA_URL:-http://ollama:11434}
     networks: [edge, backend]
+    # Not on the model services: live chat works without them, because the AI hands off.
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
     healthcheck:
+      # Readiness covers Postgres and Valkey only; /api/health reports the model services too.
       test: ["CMD", "python", "-m", "app.healthcheck"]
       interval: 10s
       timeout: 5s
@@ -99,6 +102,50 @@ services:
       start_interval: 1s
     logging: *logging
 
+  # One model per TEI container (ADR-0028). An ARM64 server sets SC_TEI_TAG=cpu-arm64-1.9.4.
+  # --auto-truncate cuts an input longer than the model's limit instead of refusing it.
+  tei-embed:
+    image: ghcr.io/huggingface/text-embeddings-inference:${SC_TEI_TAG:-cpu-1.9.4}
+    restart: unless-stopped
+    command: ["--model-id", "${SC_EMBEDDING_MODEL:-BAAI/bge-m3}", "--auto-truncate", "--json-output"]
+    volumes:
+      - tei_embed_models:/data
+    networks: [backend]
+    healthcheck: &tei-healthcheck
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # The first start downloads the model: bge-m3 is 2.3 GB. Cached restarts pass within seconds.
+      start_period: 30m
+      start_interval: 5s
+    logging: *logging
+
+  tei-rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:${SC_TEI_TAG:-cpu-1.9.4}
+    restart: unless-stopped
+    command: ["--model-id", "${SC_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}", "--auto-truncate", "--json-output"]
+    volumes:
+      - tei_rerank_models:/data
+    networks: [backend]
+    healthcheck: *tei-healthcheck
+    logging: *logging
+
+  ollama:
+    image: ollama/ollama:0.40.0
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    logging: *logging
+
 networks:
   edge:
   backend:
@@ -108,3 +155,6 @@ volumes:
   caddy_config:
   postgres_data:
   valkey_data:
+  tei_embed_models:
+  tei_rerank_models:
+  ollama_models:

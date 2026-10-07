@@ -77,5 +77,6 @@ def test_drops_successful_health_check_access_lines() -> None:
     access_filter = HealthCheckAccessFilter()
 
     assert not access_filter.filter(access_record("/api/health", 200))
+    assert not access_filter.filter(access_record("/api/health/ready", 200))
     assert access_filter.filter(access_record("/api/health", 503))
     assert access_filter.filter(access_record("/api/conversations", 200))

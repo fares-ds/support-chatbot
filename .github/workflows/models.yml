@@ -1,0 +1,60 @@
+name: Default models
+
+# Checks that TEI's x86-64 CPU image loads the install bundle's default embedding model and
+# reranker, and answers with them. It runs when the bundle's Compose file changes, since that file
+# sets the models and the TEI version, or by hand.
+
+on:
+  pull_request:
+    paths:
+      - deploy/compose.yaml
+      - .github/workflows/models.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tei:
+    name: TEI serves the default models
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [tei-embed, tei-rerank]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start the service with the bundle's defaults
+        run: |
+          printf 'SC_VERSION=ci\nSC_DOMAIN=localhost\nSC_POSTGRES_PASSWORD=ci\n' > "$RUNNER_TEMP/server.env"
+          docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" \
+            up --detach --wait --wait-timeout 1200 ${{ matrix.service }}
+          docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" \
+            ps --format '{{.Service}} {{.Image}} {{.Command}}'
+      - name: Embed
+        if: matrix.service == 'tei-embed'
+        run: |
+          docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" exec -T tei-embed \
+            curl --fail --silent --show-error http://127.0.0.1/embed \
+            --header 'Content-Type: application/json' \
+            --data '{"inputs": ["Comment changer de forfait ?", "كيف أغير اشتراكي؟"]}' > "$RUNNER_TEMP/vectors.json"
+          jq --exit-status 'length == 2 and (.[0] | length) == 1024' "$RUNNER_TEMP/vectors.json"
+      - name: Rerank
+        if: matrix.service == 'tei-rerank'
+        run: |
+          docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" exec -T tei-rerank \
+            curl --fail --silent --show-error http://127.0.0.1/rerank \
+            --header 'Content-Type: application/json' \
+            --data '{"query": "How do I change my plan?", "texts": ["Our office is in Algiers.", "You can change your plan in Settings, at any time."]}' \
+            | tee "$RUNNER_TEMP/ranking.json"
+          jq --exit-status '.[0].index == 1' "$RUNNER_TEMP/ranking.json"
+      - name: Memory
+        run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'
+      - name: Logs
+        if: failure()
+        run: docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" logs --no-color
+      - name: Stop
+        if: always()
+        run: docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" down --volumes

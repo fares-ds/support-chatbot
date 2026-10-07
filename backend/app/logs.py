@@ -49,14 +49,13 @@ class RequestIdFilter(logging.Filter):
 class HealthCheckAccessFilter(logging.Filter):
     """Drops the access line of each successful health check, which Docker runs every 10 s."""
 
+    PATHS = frozenset({"/api/health", "/api/health/ready"})
+
     def filter(self, record: logging.LogRecord) -> bool:
         # Uvicorn's access records carry (client, method, path, HTTP version, status).
         args = record.args
         return not (
-            isinstance(args, tuple)
-            and len(args) == 5
-            and args[2] == "/api/health"
-            and args[4] == 200
+            isinstance(args, tuple) and len(args) == 5 and args[2] in self.PATHS and args[4] == 200
         )
 
 

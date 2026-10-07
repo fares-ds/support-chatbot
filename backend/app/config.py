@@ -22,12 +22,22 @@ class Settings(BaseSettings):
 
     valkey_url: str = "redis://valkey:6379/0"
 
+    # Local model services (ADR-0028). Development may point Ollama at another server.
+    tei_embed_url: str = "http://tei-embed"
+    tei_rerank_url: str = "http://tei-rerank"
+    ollama_url: str = "http://ollama:11434"
+
     @field_validator("postgres_password")
     @classmethod
     def _not_empty(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value():
             raise ValueError("must not be empty")
         return value
+
+    @field_validator("tei_embed_url", "tei_rerank_url", "ollama_url")
+    @classmethod
+    def _without_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/")
 
     @property
     def database_url(self) -> URL:

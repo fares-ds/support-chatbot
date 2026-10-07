@@ -210,7 +210,7 @@ A typical 20-page PDF must be answerable within 60 seconds of upload with an ext
 | KB-11 | Status runs Processing → Ready, or Failed with a reason, and reaches the dashboard live. | P0 |
 | KB-12 | Processing is idempotent and atomic: a version becomes searchable only when all its chunks are written. A failed re-processing leaves the previous version serving. | P0 |
 | KB-13 | Delete: chunks stop being retrievable within 5 s; stored files and parsed text are purged within 1 hour. | P0 |
-| KB-14 | Changing the embedding model re-embeds the whole knowledge base in the background. The new model's rows and index are built beside the old ones, which keep serving until the switch and are then deleted. | P0 |
+| KB-14 | Changing the embedding model re-embeds the whole knowledge base in the background. The new model's rows and index are built beside the old ones, which keep serving until the switch and are then deleted. Replacing the install's local embedding model with another local one is a vendor operation ([ADR-0030](adr/0030-vendor-sets-local-embedding-and-rerank-models.md)). | P0 |
 | KB-15 | A reconciler requeues jobs stuck for more than 15 minutes, or marks them Failed. | P0 |
 | KB-16 | Replace a document while keeping its name; warn on duplicate content; retry a failed document; preview a document's chunks. | P1 |
 | KB-17 | Pick full-text dictionaries by document language. Until then, every full-text index uses Postgres's language-neutral `simple` dictionary. | P1 |
@@ -255,7 +255,7 @@ flowchart TD
 | ID | Requirement | Priority |
 | --- | --- | --- |
 | AI-1 | Every model call goes through one provider interface built on the LiteLLM library ([ADR-0001](adr/0001-model-providers-behind-one-interface.md), [ADR-0024](adr/0024-stack-review-corrections.md)). Classification runs as a DSPy module for its structured output. Answers are generated and streamed through LiteLLM directly, not through DSPy. Embeddings and reranking call TEI or an external API. | P0 |
-| AI-2 | The Owner chooses the models in the dashboard: for classifying and answering, a local model on Ollama, an external provider, or any OpenAI-compatible endpoint (which covers vLLM on a GPU host); for embeddings and reranking, a local model on TEI or an external API. Any model, at the Owner's risk ([ADR-0011](adr/0011-cpu-first-models.md)). | P0 |
+| AI-2 | The Owner chooses the models in the dashboard: for classifying and answering, a local model on Ollama, an external provider, or any OpenAI-compatible endpoint (which covers vLLM on a GPU host); for embeddings and for reranking, the install's local model on TEI, which the vendor sets, or an external API ([ADR-0030](adr/0030-vendor-sets-local-embedding-and-rerank-models.md)). Any model, at the Owner's risk ([ADR-0011](adr/0011-cpu-first-models.md)). | P0 |
 | AI-3 | Provider API keys are stored encrypted and never shown again after saving. Choosing an external provider shows the Owner that conversation text and knowledge excerpts will be sent to it. | P0 |
 | AI-4 | No install requires a GPU. Default local models (4–7B class) are picked by the M0 benchmark on OneClickDZ's VPS. | P0 |
 | AI-5 | If no CPU-sized model meets the quality targets for a language an install serves, the vendor sets that install's starting models to answer through an external provider. The vendor sets every install's starting models; the Owner may change them afterwards (AI-2). | P0 |
@@ -416,7 +416,7 @@ The dashboard must make "what needs a person right now" impossible to miss, and 
 | D-16 | Business profile: business name, and the business description the classifier uses (required, ≤ 500 characters). | P0 |
 | D-17 | Widget: the snippet, allowed domains, identity secret with rotation (ID-7), bubble visibility for customers and visitors (ID-3), default language, and where the widget last loaded. | P0 |
 | D-18 | AI: display name, greeting in English, French and Arabic, and the AI switch (AI-7). The vendor ships default texts in all three languages for the greeting and every canned reply (decline, smalltalk, handoff, resolved); the Owner edits the canned replies later (D-22, P1). | P0 |
-| D-19 | Models: answering and classifying model, embedding model and reranker, each local, external or any OpenAI-compatible endpoint, with encrypted API keys (AI-2, AI-3). Changing the embedding model warns that the knowledge base will be re-embedded. A model without a calibrated relevance threshold is marked uncalibrated (Gate 2). | P0 |
+| D-19 | Models: the answering and classifying model, local, external or any OpenAI-compatible endpoint; the embedding model and the reranker, each the install's local model, shown by name, or an external API ([ADR-0030](adr/0030-vendor-sets-local-embedding-and-rerank-models.md)). API keys are stored encrypted (AI-2, AI-3). Changing the embedding model warns that the knowledge base will be re-embedded. A model without a calibrated relevance threshold is marked uncalibrated (Gate 2). | P0 |
 | D-20 | Team: invite by a single-use link that expires in 7 days, with role Owner or Agent; change roles; remove members. An install always keeps at least one Owner. The vendor admin appears in the list and cannot be removed or disabled ([ADR-0021](adr/0021-vendor-admin-account.md)). | P0 |
 | D-21 | Password reset without email: the Owner creates a single-use reset link for an agent and shares it; the vendor resets an Owner's password from the server. | P0 |
 | D-22 | Edit the decline, smalltalk, handoff and resolved notices in all three languages. | P1 |
@@ -907,6 +907,7 @@ How the first draft became this PRD. Each row links to its record.
 | 2026-10-06 | One private repository on the vendor's personal GitHub account, with a root per toolchain; trunk-based, with squash-merged pull requests; releases are `vX.Y.Z` tags. | [ADR-0027](adr/0027-repository-layout-and-git-workflow.md) |
 | 2026-10-06 | TEI loads one model per container, so embeddings and reranking run in two TEI containers; an install runs eight containers. | [ADR-0028](adr/0028-two-tei-containers.md) |
 | 2026-10-06 | The server CLI is one Python script using only the standard library; `report` and `reset-password` run in the backend image. | [ADR-0029](adr/0029-server-cli-in-standard-library-python.md) |
+| 2026-10-07 | The vendor sets each install's local embedding model and reranker; in the dashboard the Owner chooses between them and an external API. | [ADR-0030](adr/0030-vendor-sets-local-embedding-and-rerank-models.md) |
 | 2026-10-05 | Built by Fares alone, with Claude Code; no timeline, milestones only. | — |
 | 2026-10-05 | The Owner sets the AI's display name; "agent" means a human, "AI assistant" the bot. | [glossary](glossary.md) |
 

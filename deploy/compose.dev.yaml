@@ -1,7 +1,29 @@
-# Development only: builds the backend from source. The compose.yaml at the repository root
-# merges it over compose.yaml. It is not part of the install bundle.
+# Development only: the compose.yaml at the repository root merges it over compose.yaml.
+# It is not part of the install bundle.
 
 services:
   api:
     build: ../backend
     pull_policy: build
+
+  # The TEI image that matches this machine's CPU, natively. One tag per service: Compose labels
+  # each build with its service, so a shared tag would flip between them and recreate containers.
+  tei-embed:
+    image: support-chatbot-tei-embed:dev
+    build:
+      context: .
+      dockerfile: tei.dev.Dockerfile
+    pull_policy: build
+
+  tei-rerank:
+    image: support-chatbot-tei-rerank:dev
+    build:
+      context: .
+      dockerfile: tei.dev.Dockerfile
+    pull_policy: build
+
+  # The Ollama image is large (about 9 GB), so in development the stack's own Ollama runs only
+  # with the "ollama" profile, as CI runs it. Otherwise point SC_OLLAMA_URL at an Ollama that
+  # already runs, in a .env file at the repository root. The README has both.
+  ollama:
+    profiles: [ollama]
