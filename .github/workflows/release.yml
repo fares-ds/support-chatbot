@@ -49,11 +49,14 @@ jobs:
       - name: Make room for the Ollama image, and for the second install's disk check
         run: |
           # sc install wants 30 GB free; the restore test installs twice on one runner, the second
-          # time with the first install's images and models still on disk.
+          # time with the first install's 8 GB still on disk. One at a time, these took 5.5 minutes.
           df --human-readable /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache \
+          for directory in /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache \
             /usr/local/.ghcup /usr/share/swift /usr/lib/jvm /usr/local/share/powershell \
-            /usr/local/lib/node_modules
+            /usr/local/lib/node_modules; do
+            sudo rm -rf "$directory" &
+          done
+          wait
           df --human-readable /
       - name: Build the images
         run: |
