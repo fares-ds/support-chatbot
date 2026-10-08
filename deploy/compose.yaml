@@ -66,6 +66,41 @@ services:
       start_interval: 2s
     logging: *logging
 
+  # The worker: Celery with Beat (OPS-10). It runs background jobs from Valkey, and Beat schedules
+  # the timed ones. Like the API, it starts only after the migration job succeeds.
+  worker:
+    image: ghcr.io/fares-ds/support-chatbot-backend:${SC_VERSION:?SC_VERSION is not set}
+    command:
+      - celery
+      - --app=app.worker
+      - worker
+      - --beat
+      - --schedule=/tmp/celerybeat-schedule
+      - --loglevel=INFO
+    restart: unless-stopped
+    environment:
+      SC_ENVIRONMENT: ${SC_ENVIRONMENT:-production}
+      SC_POSTGRES_PASSWORD: ${SC_POSTGRES_PASSWORD:?SC_POSTGRES_PASSWORD is not set}
+      # Above the longest job (OPS-11); a placeholder until the M0 benchmark measures it.
+      SC_CELERY_VISIBILITY_TIMEOUT: ${SC_CELERY_VISIBILITY_TIMEOUT:-3600}
+    networks: [backend]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      # The worker answers a ping through Valkey, so it fails when Valkey cannot be reached.
+      test: ["CMD", "python", "-m", "app.worker_healthcheck"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
+    logging: *logging
+
   # The migration job (ADR-0013): it migrates the database to the newest revision and exits. The
   # API starts only after it succeeds, and never migrates on startup. Running it again changes
   # nothing.

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# The backend image. It runs the API, the migration job (`python -m app.migrate`), and the worker
-# in a later release (ADR-0027).
+# The backend image. It runs the API, the worker (`celery --app=app.worker worker --beat`) and the
+# migration job (`python -m app.migrate`) (ADR-0027).
 
 FROM python:3.12.15-slim-trixie AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /bin/uv

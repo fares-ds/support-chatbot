@@ -11,6 +11,9 @@ services:
   migrate:
     pull_policy: never
 
+  worker:
+    pull_policy: never
+
   # The TEI image that matches this machine's CPU, natively. One tag per service: Compose labels
   # each build with its service, so a shared tag would flip between them and recreate containers.
   tei-embed:

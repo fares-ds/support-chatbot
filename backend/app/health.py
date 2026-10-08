@@ -11,6 +11,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -36,6 +37,15 @@ async def _no_revision() -> None:
     return None
 
 
+type Heartbeat = Callable[[], Awaitable[datetime | None]]
+"""When the worker last beat: Celery Beat schedules the beat and the worker runs it, so a fresh
+beat shows both work. None before the first."""
+
+
+async def _no_heartbeat() -> None:
+    return None
+
+
 @dataclass(frozen=True)
 class HealthChecks:
     serving: Mapping[str, Check]
@@ -43,6 +53,7 @@ class HealthChecks:
     others: Mapping[str, Check] = field(default_factory=dict)
     """Everything else the install runs."""
     schema_revision: Revision = _no_revision
+    worker_heartbeat: Heartbeat = _no_heartbeat
 
 
 class CheckStatus(StrEnum):
@@ -59,6 +70,8 @@ class FullHealthReport(HealthReport):
     schema_revision: str | None
     """Reported, never a reason to be unhealthy: an older API keeps running on a newer, expanded
     schema while an upgrade or a rollback is under way (ADR-0013)."""
+    worker_heartbeat: datetime | None
+    """When the worker last beat; the worker check turns down when it is stale."""
 
 
 def postgres_check(engine: AsyncEngine) -> Check:
@@ -76,6 +89,36 @@ def schema_revision(engine: AsyncEngine) -> Revision:
             return result.scalar_one_or_none()
 
     return revision
+
+
+def last_heartbeat(engine: AsyncEngine, name: str = "worker") -> Heartbeat:
+    async def beat() -> datetime | None:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text("SELECT beat_at FROM heartbeats WHERE name = :name"), {"name": name}
+            )
+            return result.scalar_one_or_none()
+
+    return beat
+
+
+def heartbeat_check(
+    last_beat: Heartbeat,
+    *,
+    stale_after: timedelta,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> Check:
+    """Passes while the last beat is at most `stale_after` old."""
+
+    async def check() -> None:
+        beat = await last_beat()
+        if beat is None:
+            raise LookupError("no heartbeat yet")
+        age = clock() - beat
+        if age > stale_after:
+            raise TimeoutError(f"last beat {age.total_seconds():.0f} s ago")
+
+    return check
 
 
 def valkey_check(client: Redis) -> Check:
@@ -135,11 +178,14 @@ _UNAVAILABLE: dict[int | str, dict[str, Any]] = {
 async def health(
     response: Response, checks: Annotated[HealthChecks, Depends(get_health_checks)]
 ) -> FullHealthReport:
-    report, revision = await asyncio.gather(
+    report, revision, heartbeat = await asyncio.gather(
         _report(response, {**checks.serving, **checks.others}),
-        _read_revision(checks.schema_revision),
+        _read(checks.schema_revision, "schema revision"),
+        _read(checks.worker_heartbeat, "worker heartbeat"),
     )
-    return FullHealthReport(**report.model_dump(), schema_revision=revision)
+    return FullHealthReport(
+        **report.model_dump(), schema_revision=revision, worker_heartbeat=heartbeat
+    )
 
 
 @router.get("/health/ready", responses=_UNAVAILABLE)
@@ -149,14 +195,14 @@ async def ready(
     return await _report(response, checks.serving)
 
 
-async def _read_revision(
-    revision: Revision, check_timeout: float = CHECK_TIMEOUT_SECONDS
-) -> str | None:
+async def _read[T](
+    read: Callable[[], Awaitable[T | None]], what: str, check_timeout: float = CHECK_TIMEOUT_SECONDS
+) -> T | None:
     try:
         async with asyncio.timeout(check_timeout):
-            return await revision()
+            return await read()
     except Exception as error:
-        logger.warning("schema revision unreadable", extra={"error": type(error).__name__})
+        logger.warning(f"{what} unreadable", extra={"error": type(error).__name__})
         return None
 
 
