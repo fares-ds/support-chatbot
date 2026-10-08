@@ -14,7 +14,7 @@ This directory also holds development files that stay out of the bundle:
 - `compose.dev.yaml` and `dev.env`, for the development stack;
 - `tei.dev.Dockerfile`;
 - `caddy/`, the Caddy image, with the dashboard's and widget's files;
-- `build_bundle.py`, `tests/` and `pyproject.toml`, which configures their checks.
+- `build_bundle.py`, `upgrade_test.py`, `tests/` and `pyproject.toml`, which configures their checks.
 
 ## Releases
 
@@ -36,6 +36,21 @@ The Release workflow (`.github/workflows/release.yml`) then:
 `build_bundle.py` refuses to build when an image is not pinned, or when `compose.yaml` reads a setting that `env.template` does not list. Every pull request that touches the backend or `deploy/` runs the same build without publishing, and starts the bundle on the CI runner.
 
 ARM64 images wait for the minimum specs (OPS-2).
+
+### The upgrade test
+
+On every pull request that touches `backend/` or `deploy/`, the Release workflow's `upgrade` job runs `upgrade_test.py` (OPS-4, ADR-0013). On a release tag, the publish job runs it on the images it built, after scanning them and before pushing them. It brings up the previous release (the newest published one) from its bundle and images, seeds its database (`backend/tests/upgrade_seeds/`), and runs the smoke test. Then it migrates the database with the candidate's image and runs the candidate's smoke test, and runs the previous release's smoke test once more on the migrated database, as after a rollback. Last, a negative control renames a column the previous release reads, and that release's smoke test must fail.
+
+The smoke test: a release's migration job, API and worker start; Postgres and Valkey answer; and the worker writes a heartbeat after the start, which the API reads back.
+
+To run it on a machine with Docker, build the candidate's image first:
+
+```sh
+docker build --tag ghcr.io/fares-ds/support-chatbot-backend:0.0.0 backend
+python3 deploy/upgrade_test.py --candidate 0.0.0  # Python 3.10 or later
+```
+
+The previous release's images are private, so log in to the registry first, or build them from the release's tag: `git archive --format=tar v0.1.0:backend | docker build --tag ghcr.io/fares-ds/support-chatbot-backend:0.1.0 -`. `--previous none` tests a first release. The test runs as its own Compose project, `sc-upgrade-test`, and removes its volumes when it ends.
 
 ## Pulling the images: one read-only token per install
 

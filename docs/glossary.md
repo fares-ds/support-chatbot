@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-08, with the machine account (ADR-0031), the service account (ADR-0032), and backups and snapshots (ADR-0033).
+Updated 2026-10-08, with the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), and the upgrade test's smoke test and seeds.
 
 ## People and roles
 
@@ -36,6 +36,8 @@ Updated 2026-10-08, with the machine account (ADR-0031), the service account (AD
 | Machine account | The vendor's second GitHub account. It holds each install's read-only pull token, and can read only our two packages ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md)). |
 | Backup | A restic snapshot of an install's database dump and stored files, sent encrypted to the install's backup repository off the server. `sc backup` takes one daily from the host's cron. It leaves out `.env`, whose copy the vendor keeps in a password manager ([ADR-0033](adr/0033-backups-leave-out-the-encryption-key.md)). |
 | Snapshot | One backup in the repository, named by its ID. `sc restore` brings an install's data back as of one, the latest by default. |
+| Smoke test | The check that a release runs on a database: its migration job, API and worker start, Postgres and Valkey answer, and the worker writes a fresh heartbeat that the API reads back. The upgrade test runs it for both releases; it grows with M1's endpoints. |
+| Upgrade seed | The rows the upgrade test puts in the previous release's database, one SQL file per migration revision that adds a table, in `backend/tests/upgrade_seeds/`. |
 | Stored files | Uploaded files and their parsed text, on the install's files volume (`/data/files`). Backed up with the database. |
 
 ## Conversations

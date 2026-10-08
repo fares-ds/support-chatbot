@@ -179,7 +179,7 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 | Health | A health check on every container, a `status` command, and the vendor's external uptime check on each install's health endpoint |
 | AI report | `report` prints the weekly figures from the turn records |
 | Logs | Structured JSON. Docker log size and file count are capped in the Compose file, so logs cannot fill the disk. |
-| CI | Lint, type checks and tests; an upgrade test from the previous release's database; dependency and image scanning with Trivy, failing on high and critical findings that have a fix, also weekly; third-party actions pinned by commit SHA; a check that the generated API client and event types are up to date |
+| CI | Lint, type checks and tests; an upgrade test from the previous release's seeded database, which both releases' smoke tests must pass on (`deploy/upgrade_test.py`); dependency and image scanning with Trivy, failing on high and critical findings that have a fix, also weekly; third-party actions pinned by commit SHA; a check that the generated API client and event types are up to date |
 
 Server CLI commands: `install`, `upgrade <version>`, `backup`, `restore`, `status`, `report`, `reset-password`.
 
