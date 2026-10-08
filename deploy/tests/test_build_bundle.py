@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from build_bundle import build, missing_from_template, pin, unpinned_images  # noqa: E402
+from build_bundle import build, missing_from_template, pin, unpinned_images
 
 COMPOSE = """services:
   api:
@@ -26,7 +26,6 @@ class PinTest(unittest.TestCase):
         self.assertIn("image: ghcr.io/fares-ds/support-chatbot-backend:1.4.0\n", pinned)
         self.assertIn("image: ghcr.io/fares-ds/support-chatbot-caddy:1.4.0\n", pinned)
         self.assertNotIn("SC_VERSION", pinned)
-
 
 
 class UnpinnedImagesTest(unittest.TestCase):
@@ -54,7 +53,6 @@ class UnpinnedImagesTest(unittest.TestCase):
                 self.assertEqual(len(unpinned_images(compose, "1.4.0")), 1)
 
 
-
 class TemplateTest(unittest.TestCase):
     def test_the_template_covers_every_setting_the_compose_file_reads(self) -> None:
         compose = (
@@ -69,7 +67,6 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(missing_from_template(compose, template), ["SC_TEI_TAG"])
 
 
-
 def deploy_directory(root: Path, compose: str = COMPOSE) -> Path:
     deploy = root / "deploy"
     deploy.mkdir()
@@ -77,6 +74,7 @@ def deploy_directory(root: Path, compose: str = COMPOSE) -> Path:
     (deploy / "Caddyfile").write_text("{$SC_DOMAIN} {\n}\n")
     (deploy / "env.template").write_text("SC_DOMAIN=\n")
     (deploy / "README.md").write_text("# The install bundle\n")
+    (deploy / "sc").write_text("#!/usr/bin/env python3\n")
     (deploy / "compose.dev.yaml").write_text("services: {}\n")
     return deploy
 
@@ -88,6 +86,7 @@ class BuildTest(unittest.TestCase):
 
             with tarfile.open(archive) as tar:
                 names = sorted(tar.getnames())
+                modes = {member.name.split("/")[-1]: member.mode for member in tar.getmembers()}
                 compose = tar.extractfile("support-chatbot-1.4.0/compose.yaml").read().decode()
             checksum = archive.with_name(archive.name + ".sha256").read_text()
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -101,9 +100,12 @@ class BuildTest(unittest.TestCase):
                 "support-chatbot-1.4.0/README.md",
                 "support-chatbot-1.4.0/compose.yaml",
                 "support-chatbot-1.4.0/env.template",
+                "support-chatbot-1.4.0/sc",
             ],
         )
         self.assertIn("support-chatbot-backend:1.4.0", compose)
+        self.assertEqual(modes["sc"], 0o755)  # so the vendor runs ./sc
+        self.assertEqual(modes["compose.yaml"], 0o644)
         self.assertEqual(checksum, f"{digest}  support-chatbot-1.4.0.tar.gz\n")
 
     def test_a_version_reads_major_minor_patch(self) -> None:

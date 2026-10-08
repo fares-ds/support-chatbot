@@ -6,12 +6,15 @@ What the vendor copies to a business's server to install or upgrade Support Chat
 | --- | --- |
 | `compose.yaml` | The stack. Every image is pinned: ours to the release, the others to fixed tags. |
 | `Caddyfile` | HTTPS for the install's domain, and the API behind it |
-| `env.template` | The install's settings, copied to `.env` next to `compose.yaml` |
+| `env.template` | The install's settings, which `sc install` writes to `.env` |
+| `sc` | The server CLI (ADR-0029): `install` now; `upgrade`, `backup`, `restore` and `status` follow |
 | `README.md` | This file |
 
-The server CLI, `sc`, joins the bundle in #8.
-
-This directory also holds development files that stay out of the bundle: `compose.dev.yaml` and `dev.env` for the development stack, `tei.dev.Dockerfile`, `caddy/` (the Caddy image, with the dashboard's and widget's files), and `build_bundle.py` and its tests.
+This directory also holds development files that stay out of the bundle:
+- `compose.dev.yaml` and `dev.env`, for the development stack;
+- `tei.dev.Dockerfile`;
+- `caddy/`, the Caddy image, with the dashboard's and widget's files;
+- `build_bundle.py`, `tests/` and `pyproject.toml`, which configures their checks.
 
 ## Releases
 
@@ -49,21 +52,38 @@ Give the machine account nothing else: no access to the repository, and no other
 
 1. Signed in as the machine account, open **Settings**, **Developer settings**, **Personal access tokens**, **Tokens (classic)**, then **Generate new token (classic)**.
 2. Name it after the install, such as `install-oneclickdz`, set an expiry, and tick only **read:packages**.
-3. On the server, log in once as the user that runs Docker:
-
-   ```sh
-   docker login ghcr.io --username fares-ds-installs --password-stdin
-   ```
-
-   Paste the token and press Ctrl-D. Docker keeps it in that user's `~/.docker/config.json`; keep the file readable by that user only.
-4. Note the expiry date. Before it, generate a new token, log in again, and delete the old one.
+3. Give it to `sc install`, which logs in as the service account (below). Docker keeps the login in `/opt/support-chatbot/.docker/config.json`, readable only by that account.
+4. Note the expiry date. Before it, generate a new token, log in again as the service account (`sudo runuser --login supportchatbot --shell /bin/sh --command 'docker login ghcr.io --username fares-ds-installs --password-stdin'`), and delete the old one.
 
 To cut an install off, delete its token under the machine account's tokens. The other installs keep working.
 
-## Installing by hand, until `sc install`
+## Installing
 
-1. Download the bundle and its checksum from the release, check them with `sha256sum --check support-chatbot-1.4.0.tar.gz.sha256`, and unpack them on the server.
-2. Copy `env.template` to `.env`, and set at least `SC_DOMAIN` and `SC_POSTGRES_PASSWORD`.
-3. Log in to the registry, as above.
-4. Run `docker compose up --detach --wait` in the bundle's directory. The migration job runs first, then the rest of the stack.
-5. Check `https://<domain>/api/health`.
+On a fresh Ubuntu server with Docker Engine and its Compose plugin, Python 3.10 or later, and the business's domain pointing at it:
+
+1. Download the bundle and its checksum from the release, check them with `sha256sum --check support-chatbot-1.4.0.tar.gz.sha256`, and unpack them.
+2. In the unpacked directory, run:
+
+   ```sh
+   sudo ./sc install --domain chat.example.com --registry-user fares-ds-installs
+   ```
+
+   It asks for the install's registry token without echoing it; `--token-file` reads it from a file instead.
+
+`sc install` checks everything first, and stops before changing anything if one is missing:
+- sudo;
+- Python 3.10;
+- Docker, and Compose 2.22;
+- 30 GB of free disk;
+- ports 80 and 443;
+- the complete bundle.
+
+Then it:
+1. creates the service account, `supportchatbot`, and copies the bundle to `/opt/support-chatbot` (ADR-0032);
+2. writes `.env` there, readable only by that account, with new random secrets: the Postgres password and the encryption key (SEC-6). It never prints them;
+3. logs in to the registry, pulls the pinned images, runs the migration job, starts the stack, and waits for every health check;
+4. checks `https://<domain>/api/health` through Caddy.
+
+A setting from `env.template` can be changed with `--set`, such as `--set SC_EMBEDDING_MODEL=…`. Secrets can't be passed that way, since shell history and `ps` would keep them.
+
+If a step fails, fix the cause and run `sc install` again: it keeps the secrets it wrote. Once an install has finished, `sc install` refuses to run again rather than replace its secrets.

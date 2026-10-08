@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
       - name: Start the service with the bundle's defaults
         run: |
-          printf 'SC_VERSION=ci\nSC_DOMAIN=localhost\nSC_POSTGRES_PASSWORD=ci\n' > "$RUNNER_TEMP/server.env"
+          printf 'SC_VERSION=ci\nSC_DOMAIN=localhost\nSC_POSTGRES_PASSWORD=ci\nSC_ENCRYPTION_KEY=ci\n' > "$RUNNER_TEMP/server.env"
           docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" \
             up --detach --wait --wait-timeout 1200 ${{ matrix.service }}
           docker compose -f deploy/compose.yaml --env-file "$RUNNER_TEMP/server.env" \

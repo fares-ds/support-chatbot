@@ -47,6 +47,8 @@ services:
     environment:
       SC_ENVIRONMENT: ${SC_ENVIRONMENT:-production}
       SC_POSTGRES_PASSWORD: ${SC_POSTGRES_PASSWORD:?SC_POSTGRES_PASSWORD is not set}
+      # Encrypts the identity secret and provider API keys in Postgres (SEC-6), from M1.
+      SC_ENCRYPTION_KEY: ${SC_ENCRYPTION_KEY:?SC_ENCRYPTION_KEY is not set}
       SC_OLLAMA_URL: ${SC_OLLAMA_URL:-http://ollama:11434}
     networks: [edge, backend]
     # Not on the model services: live chat works without them, because the AI hands off.
@@ -82,6 +84,7 @@ services:
     environment:
       SC_ENVIRONMENT: ${SC_ENVIRONMENT:-production}
       SC_POSTGRES_PASSWORD: ${SC_POSTGRES_PASSWORD:?SC_POSTGRES_PASSWORD is not set}
+      SC_ENCRYPTION_KEY: ${SC_ENCRYPTION_KEY:?SC_ENCRYPTION_KEY is not set}
       # Above the longest job (OPS-11); a placeholder until the M0 benchmark measures it.
       SC_CELERY_VISIBILITY_TIMEOUT: ${SC_CELERY_VISIBILITY_TIMEOUT:-3600}
     networks: [backend]

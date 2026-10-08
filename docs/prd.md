@@ -583,7 +583,7 @@ Each business's data stays on its own server. Three parties sit outside it: the 
 | SEC-3 | Widget isolation and safe rendering (W-2, W-3, W-9), with a strict Content Security Policy on the iframe. | P0 |
 | SEC-4 | Dashboard passwords are hashed with a modern password hash; sessions expire; sign-in attempts are rate-limited. | P0 |
 | SEC-5 | Roles are checked server-side on every request (Dashboard, Roles). | P0 |
-| SEC-6 | The identity secret and provider API keys are stored encrypted, with the encryption key held outside the database. Server secrets live in an environment file readable only by the service account. | P0 |
+| SEC-6 | The identity secret and provider API keys are stored encrypted, with the encryption key held outside the database. Server secrets live in an environment file readable only by the service account, a dedicated system user ([ADR-0032](adr/0032-dedicated-service-account.md)). | P0 |
 | SEC-7 | Vendor access: SSH keys only, which the business can revoke; the vendor admin is visible in the team list. Businesses are told the vendor can read conversations ([ADR-0021](adr/0021-vendor-admin-account.md)). | P0 |
 | SEC-8 | TLS on all traffic, through Caddy with automatic certificates. Backups are encrypted before they leave the server. | P0 |
 | SEC-9 | When an external provider is chosen, conversation text and knowledge excerpts go to it; nothing else leaves the install. No telemetry goes to the vendor. | P0 |
@@ -909,6 +909,7 @@ How the first draft became this PRD. Each row links to its record.
 | 2026-10-06 | The server CLI is one Python script using only the standard library; `report` and `reset-password` run in the backend image. | [ADR-0029](adr/0029-server-cli-in-standard-library-python.md) |
 | 2026-10-07 | The vendor sets each install's local embedding model and reranker; in the dashboard the Owner chooses between them and an external API. | [ADR-0030](adr/0030-vendor-sets-local-embedding-and-rerank-models.md) |
 | 2026-10-08 | Install pull tokens are classic tokens from a machine account that can read only our two packages, one per install. | [ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md) |
+| 2026-10-08 | An install runs as a dedicated system user, `supportchatbot`, in `/opt/support-chatbot`; only it reads the secrets. | [ADR-0032](adr/0032-dedicated-service-account.md) |
 | 2026-10-05 | Built by Fares alone, with Claude Code; no timeline, milestones only. | — |
 | 2026-10-05 | The Owner sets the AI's display name; "agent" means a human, "AI assistant" the bot. | [glossary](glossary.md) |
 

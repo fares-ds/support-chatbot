@@ -12,8 +12,9 @@ import sys
 import tarfile
 from pathlib import Path
 
-BUNDLED = ("compose.yaml", "Caddyfile", "env.template", "README.md")
-"""What the vendor copies to a server. `sc`, the server CLI, joins them in #8."""
+BUNDLED = ("compose.yaml", "Caddyfile", "env.template", "README.md", "sc")
+"""What the vendor copies to a server, with sc, the server CLI (ADR-0029)."""
+EXECUTABLE = frozenset({"sc"})
 _RELEASE = re.compile(r"^\d+\.\d+\.\d+$")
 
 _VERSION_VARIABLE = re.compile(r"\$\{SC_VERSION(?::?[?-][^}]*)?\}")
@@ -104,14 +105,17 @@ def build(version: str, deploy: Path, out: Path) -> Path:
 def _tarball(directory: str, files: dict[str, bytes]) -> bytes:
     """The same bytes for the same files: fixed times, owners and order."""
     buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as zipped:
-        with tarfile.open(fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT) as tar:
-            tar.addfile(_entry(directory, tarfile.DIRTYPE, 0o755))
-            for file in sorted(files):
-                data = files[file]
-                info = _entry(f"{directory}/{file}", tarfile.REGTYPE, 0o644)
-                info.size = len(data)
-                tar.addfile(info, io.BytesIO(data))
+    with (
+        gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as zipped,
+        tarfile.open(fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT) as tar,
+    ):
+        tar.addfile(_entry(directory, tarfile.DIRTYPE, 0o755))
+        for file in sorted(files):
+            data = files[file]
+            mode = 0o755 if file in EXECUTABLE else 0o644
+            info = _entry(f"{directory}/{file}", tarfile.REGTYPE, mode)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
     return buffer.getvalue()
 
 
