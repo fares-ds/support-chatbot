@@ -26,6 +26,8 @@ def test_a_ready_host_has_no_problems(host: FakeHost, tmp_path: Path) -> None:
         (FakeHost(docker_root_free_gb=12), "/var/lib/docker"),
         (FakeHost(docker_group=False), "docker group"),
         (FakeHost(busy_ports={443}), "port 443"),
+        # /etc/cron.d alone proves nothing: e2fsprogs ships a file there.
+        (FakeHost(cron=False), "cron is not installed"),
     ],
 )
 def test_each_missing_prerequisite_is_named_plainly(

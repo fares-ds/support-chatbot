@@ -4,8 +4,8 @@
     sudo ./sc install --domain chat.example.com --registry-user fares-ds-installs
 
 One file, standard library only, run by the host's python3 (3.10 or later), so a fresh server
-needs nothing beyond Docker. `install` is its first command (#8); `upgrade`, `backup`, `restore`,
-`status`, `report` and `reset-password` follow.
+needs nothing beyond Docker. `install` (#8), `backup` and `restore` (#9) exist; `upgrade`, `status`,
+`report` and `reset-password` follow.
 """
 
 import sys
@@ -15,7 +15,9 @@ if sys.version_info < (3, 10):  # noqa: UP036 - a plain message, before anything
 
 import argparse
 import base64
+import contextlib
 import getpass
+import json
 import os
 import re
 import secrets
@@ -25,7 +27,7 @@ import ssl
 import subprocess
 import time
 import urllib.request
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 INSTALL_DIR = Path("/opt/support-chatbot")
@@ -38,12 +40,16 @@ MIN_FREE_GB = 30
 """The images, two TEI models and an Ollama model, with room to spare. A placeholder until the
 M0 benchmark publishes the minimum specs (OPS-2)."""
 BUNDLE_FILES = ("compose.yaml", "Caddyfile", "env.template", "sc")
+CRON_FILE = Path("/etc/cron.d/support-chatbot")
+BACKUP_TIME = (3, 17)
+"""When the daily backup runs, in the server's time zone: (hour, minute)."""
 
 
 class CommandFailed(Exception):
-    def __init__(self, args: Sequence[str], output: str) -> None:
+    def __init__(self, args: Sequence[str], output: str, returncode: int = 1) -> None:
         super().__init__(f"{' '.join(args[:3])} failed: {output.strip()[-500:]}")
         self.args_run = list(args)
+        self.returncode = returncode
 
 
 class Host:
@@ -95,6 +101,10 @@ class Host:
             ]
         )
 
+    def has_cron(self) -> bool:
+        """The daemon, not just /etc/cron.d, which other packages also create."""
+        return shutil.which("cron") is not None or Path("/usr/sbin/cron").exists()
+
     def group_exists(self, name: str) -> bool:
         import grp
 
@@ -117,9 +127,12 @@ class Host:
         user: str | None = None,
         input: str | None = None,
         cwd: Path | None = None,
+        stdin_from: Path | None = None,
+        stdout_to: Path | None = None,
     ) -> str:
         """Runs a command and returns its output. As `user`, with that user's home, so Docker
-        keeps the user's registry login."""
+        keeps the user's registry login. `stdin_from` and `stdout_to` stream a file, such as a
+        database dump, in or out; a file it writes is readable only by its owner."""
         if user is not None:
             args = [
                 "runuser",
@@ -131,15 +144,35 @@ class Host:
                 _shell_words(args, cwd),
             ]
             cwd = None
-        try:
-            done = subprocess.run(
-                args, input=input, cwd=cwd, capture_output=True, text=True, check=False
+        with contextlib.ExitStack() as files:
+            stdin = files.enter_context(stdin_from.open("rb")) if stdin_from else None
+            stdout = (
+                files.enter_context(
+                    os.fdopen(
+                        os.open(stdout_to, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb"
+                    )
+                )
+                if stdout_to
+                else subprocess.PIPE
             )
-        except FileNotFoundError as error:
-            raise CommandFailed(args, str(error)) from None
+            try:
+                done = subprocess.run(
+                    args,
+                    input=input.encode() if input is not None else None,
+                    stdin=stdin,
+                    stdout=stdout,
+                    stderr=subprocess.PIPE,
+                    cwd=cwd,
+                    check=False,
+                )
+            except FileNotFoundError as error:
+                raise CommandFailed(args, str(error)) from None
+        output = (done.stdout or b"").decode(errors="replace")
         if done.returncode != 0:
-            raise CommandFailed(args, done.stderr or done.stdout)
-        return done.stdout.strip()
+            raise CommandFailed(
+                args, done.stderr.decode(errors="replace") or output, done.returncode
+            )
+        return output.strip()
 
     def fetch(self, url: str, cafile: Path | None) -> str:
         if not url.startswith("https://"):  # sc builds every URL it fetches
@@ -210,6 +243,8 @@ def prerequisite_problems(
     for port in ports:
         if host.port_busy(port):
             problems.append(f"Something already listens on port {port}; Caddy needs it.")
+    if not host.has_cron():
+        problems.append("cron is not installed, so backups cannot be scheduled: apt install cron.")
     for name in BUNDLE_FILES:
         if not (bundle / name).exists():
             problems.append(f"The bundle is missing {name}: unpack the whole release archive.")
@@ -223,9 +258,12 @@ def _version(text: str) -> tuple[int, ...]:
 GENERATED: dict[str, Callable[[], str]] = {
     "SC_POSTGRES_PASSWORD": lambda: secrets.token_hex(32),
     "SC_ENCRYPTION_KEY": lambda: base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
+    "SC_RESTIC_PASSWORD": lambda: secrets.token_hex(32),
 }
 """Secrets sc generates for each install, never prints, and never takes as arguments, which
 shell history and `ps` would keep."""
+TYPED_SECRETS = ("SC_RESTIC_AWS_SECRET_ACCESS_KEY",)
+"""Secrets the vendor types into .env, for the same reason."""
 _SETTING = re.compile(r"^SC_[A-Z0-9_]+$")
 
 
@@ -243,6 +281,9 @@ def parse_settings(given: Sequence[str]) -> dict[str, str]:
             raise ValueError(f"--set {key}: a value is one line")
         if key in GENERATED or key == "SC_DOMAIN":
             raise ValueError(f"--set {key}: sc generates it, or takes it from --domain")
+        if key in TYPED_SECRETS or (key == "SC_RESTIC_REPOSITORY" and "@" in value):
+            # A REST server's URL carries its password: rest:https://user:password@host/...
+            raise ValueError(f"--set {key}: shell history would keep it; edit .env instead")
         if key in ("SC_HTTP_PORT", "SC_HTTPS_PORT") and not (
             value.isdigit() and 1 <= int(value) <= 65535
         ):
@@ -269,8 +310,9 @@ def write_env(
 ) -> bool:
     """Writes the install's environment file, readable only by `owner`. The first time, from
     the bundle's template, with new secrets; returns True. On a rerun it keeps the file's
-    secrets, which the install's data depends on (SEC-6), and takes the domain and settings
-    given now, so a corrected typo reaches the install; returns False."""
+    secrets, which the install's data depends on (SEC-6), generates any it lacks, such as one
+    a newer bundle added, and takes the domain and settings given now, so a corrected typo
+    reaches the install; returns False."""
     values = {"SC_DOMAIN": domain, **settings}
     first = not path.exists()
     if first:
@@ -278,6 +320,8 @@ def write_env(
         lines = template.splitlines()
     else:
         lines = path.read_text(encoding="utf-8").splitlines()
+        present = read_env(path)
+        values |= {key: make() for key, make in GENERATED.items() if not present.get(key)}
     written = []
     for line in lines:
         match = re.match(r"^#?\s*(SC_[A-Z0-9_]+)=", line)
@@ -318,6 +362,7 @@ def install(
     registry_user: str,
     token: str,
     settings: dict[str, str],
+    cron_file: Path,
     health_timeout: float = 300,
     retry_every: float = 5,
 ) -> int:
@@ -372,7 +417,10 @@ def install(
         ),
         (
             "Pulling the pinned images",
-            lambda: docker("compose", "pull", "--policy", "missing", "--quiet"),
+            # The tools profile adds restic's image, so the first backup needs no download.
+            lambda: docker(
+                "compose", "--profile", "tools", "pull", "--policy", "missing", "--quiet"
+            ),
         ),
         ("Migrating the database", lambda: docker("compose", "run", "--rm", "migrate")),
         (
@@ -384,16 +432,7 @@ def install(
         for label, step in steps:
             _say(f"{label}...")
             step()
-        _say(f"Checking https://{domain} ...")
-        copy_root = None
-        if domain == "localhost":
-            cafile = install_dir / "caddy-root.crt"
-
-            def copy_root() -> Path:
-                docker("compose", "cp", f"caddy:{CADDY_ROOT}", str(cafile))
-                return cafile
-
-        _wait_healthy(host, _health_url(domain, https_port), copy_root, health_timeout, retry_every)
+        _check_health(host, install_dir, docker, domain, https_port, health_timeout, retry_every)
     except CommandFailed as error:
         _fail(str(error))
         _fail(
@@ -404,16 +443,61 @@ def install(
     except TimeoutError as error:
         _fail(str(error))
         return 1
+    schedule_backup(cron_file, install_dir)
     version = bundle_version((install_dir / "compose.yaml").read_text(encoding="utf-8"))
     marker.write_text(f"version={version}\ninstalled={time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n")
     host.chown(marker, SERVICE_USER)
     _say(f"Support Chatbot {version} is installed and healthy at https://{domain}.")
+    _say(
+        f"Now copy {install_dir / '.env'} into your password manager: a restore needs its"
+        " encryption key and backup settings, which backups leave out (ADR-0033)."
+    )
     return 0
+
+
+def schedule_backup(cron_file: Path, install_dir: Path) -> None:
+    """The host's cron runs sc backup daily, apart from the containers (OPS-6). As the service
+    account, never as root: that account owns the sc it runs."""
+    hour, minute = BACKUP_TIME
+    entry = (
+        "# Support Chatbot's daily backup (OPS-6), written by sc install. The last run's output\n"
+        f"# is in {install_dir / 'backup.log'}, and its result in backup-status.json.\n"
+        "SHELL=/bin/sh\n"
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
+        f"{minute} {hour} * * * {SERVICE_USER} {install_dir / 'sc'} backup"
+        f" > {install_dir / 'backup.log'} 2>&1\n"
+    )
+    partial = cron_file.with_name(cron_file.name + ".partial")  # cron skips names with a dot
+    partial.write_text(entry, encoding="utf-8")
+    os.chmod(partial, 0o644)
+    os.replace(partial, cron_file)
 
 
 def bundle_version(compose: str) -> str:
     match = re.search(r"ghcr\.io/fares-ds/support-chatbot-backend:(\d+\.\d+\.\d+)", compose)
     return match.group(1) if match else "unknown"
+
+
+def _check_health(
+    host: Host,
+    install_dir: Path,
+    docker: Callable[..., str],
+    domain: str,
+    https_port: int,
+    timeout: float,
+    retry_every: float,
+) -> None:
+    """The install answers healthy at https://<domain>, through Caddy."""
+    _say(f"Checking https://{domain} ...")
+    copy_root = None
+    if domain == "localhost":
+        cafile = install_dir / "caddy-root.crt"
+
+        def copy_root() -> Path:
+            docker("compose", "cp", f"caddy:{CADDY_ROOT}", str(cafile))
+            return cafile
+
+    _wait_healthy(host, _health_url(domain, https_port), copy_root, timeout, retry_every)
 
 
 def _health_url(domain: str, https_port: int) -> str:
@@ -431,8 +515,6 @@ def _wait_healthy(
     """Every service healthy through Caddy, over HTTPS. Caddy may still be obtaining its
     certificate, or for localhost still making its own certificate authority, so this
     retries."""
-    import json
-
     deadline = time.monotonic() + timeout
     cafile = None
     last = "no answer"
@@ -452,6 +534,341 @@ def _wait_healthy(
         time.sleep(retry_every)
 
 
+STAGED = "/backup/database"
+"""Where the restic service sees the install's backup/ directory, which holds the dump."""
+FILES = "/data/files"
+"""The stored files: uploads and parsed text (KB-5), on the files volume."""
+DUMP = "support_chatbot.dump"
+KEY_CHECK = "encryption-key.sha256"
+"""A fingerprint of SC_ENCRYPTION_KEY, so a restore can tell that .env holds the key the backup
+needs. The key itself stays out of backups, with the vendor (ADR-0033)."""
+NO_REPOSITORY = 10
+"""restic's exit code when the repository does not exist yet (restic 0.17 and later)."""
+
+
+def backup(host: Host, *, install_dir: Path) -> int:
+    """One restic snapshot of a database dump and the stored files, encrypted before it leaves
+    the server (OPS-6, SEC-8). Records each run in backup-status.json for sc status.
+
+    The cron entry runs it as the service account. Run with sudo, it acts as that account, so
+    the files it leaves stay usable by the next cron run."""
+    user = SERVICE_USER if host.is_root() else None
+    values = _installed_env(install_dir, "backup")
+    if values is None:
+        return 1
+    with _alone(host, install_dir, user) as alone:
+        if not alone:
+            return _backup_failed(host, install_dir, user, f"{BUSY} This backup did not start.")
+        return _back_up(host, install_dir, user, values)
+
+
+def _back_up(host: Host, install_dir: Path, user: str | None, values: dict[str, str]) -> int:
+    problem = _repository_problem(install_dir, values.get("SC_RESTIC_REPOSITORY", ""))
+    if problem:
+        return _backup_failed(host, install_dir, user, problem)
+    step = "Dumping the database"
+    dump = install_dir / "backup" / DUMP
+    key_check = dump.with_name(KEY_CHECK)
+    try:
+        _staging(host, install_dir, user)
+        # A dump left by an interrupted run under sudo is root's; this account owns backup/.
+        dump.unlink(missing_ok=True)
+        key_check.write_text(_fingerprint(values["SC_ENCRYPTION_KEY"]) + "\n", encoding="utf-8")
+        host.run(
+            [
+                "docker", "compose", "exec", "-T", "postgres",
+                "pg_dump", "--username=sc", "--format=custom", "support_chatbot",
+            ],
+            user=user,
+            cwd=install_dir,
+            stdout_to=dump,
+        )  # fmt: skip
+        _check_dump(dump)
+        step = "Saving the snapshot to the repository"
+        restic = _restic(host, install_dir, user, values["SC_RESTIC_REPOSITORY"])
+        try:
+            restic("cat", "config")
+        except CommandFailed as error:
+            if error.returncode != NO_REPOSITORY:
+                raise
+            restic("init")
+        snapshot = _snapshot_id(
+            restic("backup", "--json", "--host", values["SC_DOMAIN"], STAGED, FILES)
+        )
+    except (CommandFailed, ValueError, OSError) as error:
+        return _backup_failed(host, install_dir, user, f"{step} failed: {error}")
+    finally:
+        dump.unlink(missing_ok=True)
+        key_check.unlink(missing_ok=True)
+    message = f"Snapshot {snapshot[:8]} saved."
+    _record_backup(host, install_dir, user, ok=True, snapshot=snapshot, message=message)
+    _say(message)
+    return 0
+
+
+def restore(
+    host: Host,
+    *,
+    install_dir: Path,
+    snapshot: str,
+    confirm: Callable[[str], bool],
+    health_timeout: float = 300,
+    retry_every: float = 5,
+) -> int:
+    """Brings an install's database and stored files back as of a snapshot (US-25). On a new
+    server: sc install, then paste the old install's SC_ENCRYPTION_KEY and repository settings
+    into .env, then sc restore."""
+    user = SERVICE_USER if host.is_root() else None
+    values = _installed_env(install_dir, "restore")
+    if values is None:
+        return 1
+    with _alone(host, install_dir, user) as alone:
+        if not alone:
+            _fail(f"{BUSY} Nothing was changed.")
+            return 1
+        return _restore(
+            host, install_dir, user, values, snapshot, confirm, health_timeout, retry_every
+        )
+
+
+def _restore(
+    host: Host,
+    install_dir: Path,
+    user: str | None,
+    values: dict[str, str],
+    snapshot: str,
+    confirm: Callable[[str], bool],
+    health_timeout: float,
+    retry_every: float,
+) -> int:
+    domain = values["SC_DOMAIN"]
+    problem = _repository_problem(install_dir, values.get("SC_RESTIC_REPOSITORY", ""))
+    if problem:
+        _fail(problem)
+        return 1
+    try:
+        # Before restic runs: Docker would make the missing directory it mounts, as root.
+        dump = _staging(host, install_dir, user) / DUMP
+    except OSError as error:
+        _fail(f"Preparing {install_dir / 'backup'} failed: {error}. Nothing was changed.")
+        return 1
+    restic = _restic(host, install_dir, user, values["SC_RESTIC_REPOSITORY"])
+    try:
+        # One snapshot from here on, even if a cron backup makes a newer "latest" meanwhile.
+        found = json.loads(restic("snapshots", "--json", snapshot) or "[]")
+        if not found:
+            _fail(f"No snapshot {snapshot} in the repository. Nothing was changed.")
+            return 1
+        chosen, taken = found[0]["id"], re.sub(r"\.\d+", "", found[0]["time"])
+        fingerprint = restic("dump", chosen, f"{STAGED}/{KEY_CHECK}")
+    except (CommandFailed, ValueError, LookupError) as error:
+        _fail(f"Reading the repository failed: {error}. Nothing was changed.")
+        return 1
+    if fingerprint.strip() != _fingerprint(values["SC_ENCRYPTION_KEY"]):
+        _fail(
+            f"Snapshot {chosen[:8]} was made with a different SC_ENCRYPTION_KEY. Copy the old"
+            f" install's key from your password manager into {install_dir / '.env'}, then run"
+            " sc restore again. Nothing was changed."
+        )
+        return 1
+    if not confirm(
+        f"This replaces the database and stored files of https://{domain} with snapshot"
+        f" {chosen[:8]} from {taken}. Continue?"
+    ):
+        _fail("Nothing was changed.")
+        return 1
+
+    def docker(*args: str, stdin_from: Path | None = None) -> str:
+        return host.run(["docker", *args], user=user, cwd=install_dir, stdin_from=stdin_from)
+
+    def postgres(*args: str, stdin_from: Path | None = None) -> str:
+        return docker("compose", "exec", "-T", "postgres", *args, stdin_from=stdin_from)
+
+    def fetch_dump() -> None:
+        # Into a file sc writes: restic restore would give backup/ the old server's owner.
+        restic("dump", chosen, f"{STAGED}/{DUMP}", stdout_to=dump)
+        _check_dump(dump)
+
+    def restore_files() -> None:
+        # --delete removes what is under the included path and not in the snapshot, such as
+        # files uploaded since.
+        restic("restore", chosen, "--target", "/", "--include", FILES, "--delete")
+
+    def replace_database() -> None:
+        postgres("dropdb", "--username=sc", "--force", "--if-exists", "support_chatbot")
+        postgres("createdb", "--username=sc", "support_chatbot")
+        postgres(
+            "pg_restore", "--username=sc", "--dbname=support_chatbot",
+            "--no-owner", "--exit-on-error", "--single-transaction",
+            stdin_from=dump,
+        )  # fmt: skip
+
+    steps: list[tuple[str, Callable[[], object]]] = [
+        ("Fetching the database dump", fetch_dump),
+        ("Stopping the API and the worker", lambda: docker("compose", "stop", "api", "worker")),
+        (
+            # Jobs queued since the snapshot refer to data the restore takes away.
+            "Emptying the job queue",
+            lambda: docker("compose", "exec", "-T", "valkey", "valkey-cli", "FLUSHALL"),
+        ),
+        (f"Restoring the stored files from snapshot {chosen[:8]}", restore_files),
+        ("Replacing the database", replace_database),
+        ("Migrating the database", lambda: docker("compose", "run", "--rm", "migrate")),
+        (
+            "Starting the stack and waiting for every health check",
+            lambda: docker("compose", "up", "--detach", "--wait", "--wait-timeout", "1800"),
+        ),
+    ]
+    label = "Checking the install's health"
+    try:
+        for label, step in steps:
+            _say(f"{label}...")
+            step()
+        label = "Checking the install's health"
+        https_port = int(values.get("SC_HTTPS_PORT", "443"))
+        _check_health(host, install_dir, docker, domain, https_port, health_timeout, retry_every)
+    except (CommandFailed, TimeoutError, ValueError, OSError) as error:
+        _fail(f"The restore stopped while {label[0].lower()}{label[1:]}: {error}")
+        _fail("Fix the cause and run sc restore again: it starts over from the snapshot.")
+        return 1
+    finally:
+        dump.unlink(missing_ok=True)
+    _say(f"Restored snapshot {chosen[:8]}. Support Chatbot is healthy at https://{domain}.")
+    return 0
+
+
+BUSY = "Another backup or restore is running."
+
+
+@contextlib.contextmanager
+def _alone(host: Host, install_dir: Path, user: str | None) -> Iterator[bool]:
+    """One backup or restore at a time, so a cron backup cannot snapshot a database that a
+    restore is replacing, or overwrite another backup's dump. Yields False when another holds
+    the lock, which the kernel releases when its process ends."""
+    import fcntl
+
+    path = install_dir / ".backup.lock"
+    descriptor = os.open(path, os.O_RDONLY | os.O_CREAT, 0o644)
+    try:
+        if user:
+            host.chown(path, user)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+        else:
+            yield True
+    finally:
+        os.close(descriptor)
+
+
+def _installed_env(install_dir: Path, command: str) -> dict[str, str] | None:
+    """The install's settings, or None once it has said why they cannot be read."""
+    if not (install_dir / ".installed").exists():
+        _fail(f"Support Chatbot is not installed in {install_dir}: run sc install first.")
+        return None
+    try:
+        return read_env(install_dir / ".env")
+    except PermissionError:
+        _fail(f"Run sc {command} with sudo, or as {SERVICE_USER}.")
+        return None
+
+
+def _repository_problem(install_dir: Path, repository: str) -> str | None:
+    """Why sc cannot use this repository, if it cannot. restic runs in a throwaway container
+    that has only the S3 keys: a relative path would be written inside it and lost, and other
+    backends lack their credentials. Never prints the value, which may hold a password."""
+    if not repository:
+        return (
+            "No backup repository is set: add SC_RESTIC_REPOSITORY and its credentials to"
+            f" {install_dir / '.env'}, as README.md describes."
+        )
+    if repository.startswith(("s3:", "rest:")) or repository.removeprefix("local:").startswith("/"):
+        return None
+    return (
+        "SC_RESTIC_REPOSITORY must start with s3: or rest:, or be an absolute path on this"
+        f" server. Correct it in {install_dir / '.env'}."
+    )
+
+
+def _staging(host: Host, install_dir: Path, user: str | None) -> Path:
+    """backup/, where the dump waits for restic, which mounts it. Made here, not by Docker,
+    which would make it root's, and readable only by the service account."""
+    staging = install_dir / "backup"
+    staging.mkdir(exist_ok=True)
+    os.chmod(staging, 0o700)  # it holds the plain dump
+    if user:
+        host.chown(staging, user)
+    return staging
+
+
+def _fingerprint(key: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _restic(host: Host, install_dir: Path, user: str | None, repository: str) -> Callable[..., str]:
+    """restic, in the bundle's pinned container, reading the repository and its password from
+    .env through compose.yaml. A repository on a local path, such as a mounted disk or CI's, is
+    mounted into the container at the same path."""
+    path = repository.removeprefix("local:")
+    mount = ["--volume", f"{path}:{path}"] if path.startswith("/") else []
+
+    def restic(*args: str, stdout_to: Path | None = None) -> str:
+        return host.run(
+            ["docker", "compose", "run", "--rm", "-T", *mount, "restic", *args],
+            user=user,
+            cwd=install_dir,
+            stdout_to=stdout_to,
+        )
+
+    return restic
+
+
+def _check_dump(dump: Path) -> None:
+    """A custom-format pg_dump archive starts with PGDMP. Anything else, such as a login
+    script's greeting in the stream, would surface only when a restore fails."""
+    with dump.open("rb") as file:
+        if file.read(5) != b"PGDMP":
+            raise ValueError("the dump is not a pg_dump archive; was something else printed?")
+
+
+def _snapshot_id(output: str) -> str:
+    for line in reversed(output.splitlines()):
+        if '"summary"' in line:
+            snapshot: str = json.loads(line)["snapshot_id"]
+            return snapshot
+    raise ValueError("restic reported no snapshot")
+
+
+def _backup_failed(host: Host, install_dir: Path, user: str | None, message: str) -> int:
+    _fail(message)
+    _record_backup(host, install_dir, user, ok=False, snapshot=None, message=message)
+    return 1
+
+
+def _record_backup(
+    host: Host, install_dir: Path, user: str | None, *, ok: bool, snapshot: str | None, message: str
+) -> None:
+    """backup-status.json: the last run, and when a backup last succeeded."""
+    path = install_dir / "backup-status.json"
+    at = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    try:
+        last_success = json.loads(path.read_text(encoding="utf-8")).get("last_success")
+    except (OSError, ValueError, AttributeError):
+        last_success = None
+    record = {
+        "last_run": {"at": at, "ok": ok, "snapshot": snapshot, "message": message},
+        "last_success": at if ok else last_success,
+    }
+    partial = path.with_name(path.name + ".partial")
+    partial.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    os.replace(partial, path)
+    if user:
+        host.chown(path, user)
+
+
 def _say(message: str) -> None:
     print(message, flush=True)
 
@@ -465,6 +882,14 @@ def _token(path: str | None) -> str:
     if path:
         return Path(path).read_text(encoding="utf-8").strip()
     return getpass.getpass(f"Read-only {REGISTRY} token for this install: ").strip()
+
+
+def ask_yes(question: str) -> bool:
+    """Only a typed "yes" agrees: a stray "y", or no terminal to answer from, does not."""
+    try:
+        return input(f"{question} Type yes to continue: ").strip() == "yes"
+    except EOFError:
+        return False
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -483,7 +908,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="KEY=VALUE",
         help="a setting from env.template, such as SC_EMBEDDING_MODEL=...",
     )
+    commands.add_parser("backup", help="back up the database and the stored files now")
+    back = commands.add_parser("restore", help="bring the data back from a backup")
+    back.add_argument("--snapshot", default="latest", help="a snapshot ID (default: latest)")
+    back.add_argument("--yes", action="store_true", help="do not ask before replacing the data")
     arguments = parser.parse_args(argv)
+    if arguments.command == "backup":
+        return backup(Host(), install_dir=INSTALL_DIR)
+    if arguments.command == "restore":
+        return restore(
+            Host(),
+            install_dir=INSTALL_DIR,
+            snapshot=arguments.snapshot,
+            confirm=(lambda question: True) if arguments.yes else ask_yes,
+        )
     try:
         settings = parse_settings(arguments.set)
         check_domain(arguments.domain)
@@ -497,6 +935,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         registry_user=arguments.registry_user,
         token=_token(arguments.token_file),
         settings=settings,
+        cron_file=CRON_FILE,
     )
 
 

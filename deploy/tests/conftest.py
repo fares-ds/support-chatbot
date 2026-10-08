@@ -35,6 +35,35 @@ class Ran:
     cwd: Path | None
 
 
+STAGED: str = sc.STAGED
+FILES: str = sc.FILES
+
+
+@dataclass
+class Snapshot:
+    id: str
+    time: str
+    paths: list[str]
+    host: str
+    staged: dict[str, bytes]
+    """The files sc staged in backup/, by name."""
+    stored: dict[str, bytes]
+    """The files volume, by path."""
+
+
+@dataclass
+class FakeRepository:
+    """A restic repository: what `restic backup` stored, and what `restore` and `dump` read."""
+
+    exists: bool = True
+    snapshots: list[Snapshot] = field(default_factory=list)
+
+    def find(self, name: str) -> Snapshot | None:
+        if name == "latest":
+            return self.snapshots[-1] if self.snapshots else None
+        return next((s for s in self.snapshots if s.id.startswith(name)), None)
+
+
 @dataclass
 class FakeHost:
     """A fresh Ubuntu host with Docker, where every check passes unless a test says otherwise."""
@@ -47,6 +76,7 @@ class FakeHost:
     docker_root_free_gb: float = 100
     """Free space where Docker keeps images and volumes."""
     docker_group: bool = True
+    cron: bool = True
     busy_ports: set[int] = field(default_factory=set)
     users: set[str] = field(default_factory=set)
     failing: set[str] = field(default_factory=set)
@@ -58,6 +88,13 @@ class FakeHost:
     health: str = '{"status": "ok"}'
     ran: list[Ran] = field(default_factory=list)
     owners: dict[Path, str] = field(default_factory=dict)
+    database: bytes = b"PGDMP the database"
+    """What pg_dump writes; pg_restore replaces it."""
+    files: dict[str, bytes] = field(default_factory=lambda: {"kb/refunds.pdf": b"%PDF refunds"})
+    """The files volume: uploads and parsed text."""
+    queue: list[str] = field(default_factory=list)
+    """Jobs waiting in Valkey."""
+    repository: FakeRepository = field(default_factory=FakeRepository)
 
     def is_root(self) -> bool:
         return self.root
@@ -68,6 +105,9 @@ class FakeHost:
     def free_bytes(self, path: Path) -> int:
         gb = self.docker_root_free_gb if path == DOCKER_ROOT else self.free_gb
         return int(gb * 1024**3)
+
+    def has_cron(self) -> bool:
+        return self.cron
 
     def group_exists(self, name: str) -> bool:
         return name != "docker" or self.docker_group
@@ -95,6 +135,8 @@ class FakeHost:
         user: str | None = None,
         input: str | None = None,
         cwd: Path | None = None,
+        stdin_from: Path | None = None,
+        stdout_to: Path | None = None,
     ) -> str:
         self.ran.append(Ran(list(args), user, input, cwd))
         if " ".join(args[:2]) in self.failing:
@@ -103,6 +145,18 @@ class FakeHost:
         if self.fail_times.get(key, 0) > 0:
             self.fail_times[key] -= 1
             raise sc.CommandFailed(args, "not yet")
+        if "pg_dump" in args and stdout_to is not None:
+            stdout_to.write_bytes(self.database)
+            return ""
+        if "valkey-cli" in args and "FLUSHALL" in args:
+            self.queue.clear()
+            return "OK"
+        if "pg_restore" in args and stdin_from is not None:
+            self.database = stdin_from.read_bytes()
+            return ""
+        if args[:3] == ["docker", "compose", "run"] and "restic" in args:
+            assert cwd is not None
+            return self._restic(args, args[args.index("restic") + 1 :], cwd / "backup", stdout_to)
         if args[:2] == ["docker", "info"]:
             return str(DOCKER_ROOT)
         if args[:2] == ["docker", "version"]:
@@ -119,6 +173,64 @@ class FakeHost:
         self.ran.append(Ran(["fetch", url], None, None, None))
         return self.health
 
+    def _restic(
+        self, args: list[str], command: list[str], staged: Path, stdout_to: Path | None
+    ) -> str:
+        """restic in its container: `staged` is the install's backup/ directory."""
+        if not staged.exists():  # Docker makes a missing bind-mount source, as root
+            staged.mkdir()
+            self.owners[staged] = "root"
+        if command[0] == "init":
+            self.repository.exists = True
+            return "created restic repository"
+        if not self.repository.exists:
+            raise sc.CommandFailed(args, "Fatal: repository does not exist", returncode=10)
+        if command[:2] == ["cat", "config"]:
+            return '{"version": 2}'
+        if command[0] == "backup":
+            snapshot = Snapshot(
+                id=f"{len(self.repository.snapshots) + 1:08x}" * 8,
+                time=f"2026-10-0{len(self.repository.snapshots) + 1}T03:17:02+00:00",
+                paths=[arg for arg in command if arg.startswith("/")],
+                host=command[command.index("--host") + 1],
+                staged={path.name: path.read_bytes() for path in staged.iterdir()},
+                stored=dict(self.files),
+            )
+            self.repository.snapshots.append(snapshot)
+            return (
+                '{"message_type": "status", "percent_done": 1}\n'
+                f'{{"message_type": "summary", "snapshot_id": "{snapshot.id}"}}'
+            )
+        if command[0] == "snapshots":
+            import json
+
+            found = self.repository.find(command[-1])
+            listed = [] if found is None else [{"id": found.id, "time": found.time}]
+            return json.dumps(listed)
+        if command[0] in ("dump", "restore"):
+            found = self.repository.find(command[1])
+            if found is None:
+                raise sc.CommandFailed(
+                    args, f"Fatal: no matching ID found for prefix {command[1]!r}"
+                )
+            if command[0] == "dump":
+                content = found.staged[command[2].removeprefix(STAGED + "/")]
+                if stdout_to is None:
+                    return content.decode()
+                stdout_to.write_bytes(content)
+                return ""
+            included = [command[i + 1] for i, arg in enumerate(command) if arg == "--include"]
+            if STAGED in included:
+                for name, content in found.staged.items():
+                    (staged / name).write_bytes(content)
+                # restic gives a directory its owner from the snapshot, by number: the old
+                # server's service account, which may have had another uid.
+                self.owners[staged] = "uid 997, the old server's service account"
+            if FILES in included:
+                self.files = dict(found.stored)
+            return ""
+        raise AssertionError(f"restic {command[0]} is not faked")
+
 
 def bundle(directory: Path) -> Path:
     """An unpacked install bundle, as a release publishes it."""
@@ -130,12 +242,37 @@ def bundle(directory: Path) -> Path:
         "SC_DOMAIN=\n"
         "SC_POSTGRES_PASSWORD=\n"
         "SC_ENCRYPTION_KEY=\n"
+        "SC_RESTIC_PASSWORD=\n"
+        "SC_RESTIC_REPOSITORY=\n"
+        "SC_RESTIC_AWS_ACCESS_KEY_ID=\n"
+        "SC_RESTIC_AWS_SECRET_ACCESS_KEY=\n"
         "# SC_HTTP_PORT=80\n"
         "# SC_HTTPS_PORT=443\n"
         "# SC_EMBEDDING_MODEL=BAAI/bge-m3\n"
     )
     (directory / "sc").write_text("#!/usr/bin/env python3\n")
     return directory
+
+
+KEY = "a2V5LW9mLXRoZS1pbnN0YWxsLXRoYXQtd2FzLWJhY2tlZC11cA=="
+RESTIC_PASSWORD = "f" * 64
+
+
+def installed(tmp_path: Path, **settings: str) -> Path:
+    """An install that sc install finished, with a backup repository set."""
+    opt = tmp_path / "opt"
+    opt.mkdir(parents=True)
+    values = {
+        "SC_DOMAIN": "chat.example.com",
+        "SC_POSTGRES_PASSWORD": "p" * 64,
+        "SC_ENCRYPTION_KEY": KEY,
+        "SC_RESTIC_REPOSITORY": "s3:https://s3.example.com/backups/acme",
+        "SC_RESTIC_PASSWORD": RESTIC_PASSWORD,
+        **settings,
+    }
+    (opt / ".env").write_text("".join(f"{key}={value}\n" for key, value in values.items()))
+    (opt / ".installed").write_text("version=1.4.0\n")
+    return opt
 
 
 @pytest.fixture

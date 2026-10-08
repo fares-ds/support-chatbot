@@ -1,4 +1,5 @@
 import ast
+import stat
 import sys
 from pathlib import Path
 
@@ -9,6 +10,7 @@ TOKEN = "ghp_" + "x" * 36
 
 
 def install(host: FakeHost, tmp_path: Path, domain: str = "chat.example.com") -> int:
+    (tmp_path / "cron.d").mkdir(exist_ok=True)
     unpacked = tmp_path / "bundle"
     if not unpacked.exists():
         bundle(unpacked)
@@ -23,6 +25,7 @@ def install(host: FakeHost, tmp_path: Path, domain: str = "chat.example.com") ->
         registry_user="fares-ds-installs",
         token=TOKEN,
         settings={"SC_EMBEDDING_MODEL": "intfloat/multilingual-e5-small"},
+        cron_file=tmp_path / "cron.d" / "support-chatbot",
     )
 
 
@@ -44,7 +47,7 @@ def test_a_fresh_install_runs_its_steps_in_order_as_the_service_account(
     assert steps(host) == [
         "useradd supportchatbot",
         "docker login ghcr.io --username",
-        "docker compose pull --policy",
+        "docker compose --profile tools",  # pulls restic's image too, for the first backup
         "docker compose run --rm",
         "docker compose up --detach",
         "fetch https://chat.example.com/api/health",
@@ -76,7 +79,7 @@ def test_the_token_and_the_secrets_never_reach_arguments_or_output(
     secrets = [
         line.split("=", 1)[1]
         for line in (tmp_path / "opt" / ".env").read_text().splitlines()
-        if line.startswith(("SC_POSTGRES_PASSWORD=", "SC_ENCRYPTION_KEY="))
+        if line.startswith(("SC_POSTGRES_PASSWORD=", "SC_ENCRYPTION_KEY=", "SC_RESTIC_PASSWORD="))
     ]
     output = capsys.readouterr()
     for secret in [TOKEN, *secrets]:
@@ -134,6 +137,7 @@ def test_localhost_is_checked_with_caddys_own_certificate_authority(
 
 def test_an_unhealthy_install_is_reported_and_not_marked_installed(tmp_path: Path) -> None:
     host = FakeHost(health='{"status": "down"}')
+    (tmp_path / "cron.d").mkdir()
 
     assert (
         sc.install(  # a short wait, so the test does not sit through the real one
@@ -144,6 +148,7 @@ def test_an_unhealthy_install_is_reported_and_not_marked_installed(tmp_path: Pat
             registry_user="u",
             token=TOKEN,
             settings={},
+            cron_file=tmp_path / "cron.d" / "support-chatbot",
             health_timeout=0,
         )
         == 1
@@ -187,6 +192,7 @@ def test_an_existing_service_account_joins_the_docker_group(tmp_path: Path) -> N
 
 def install_quickly(host: FakeHost, tmp_path: Path, domain: str = "chat.example.com") -> int:
     """sc install with short pauses between health checks, and half a second in all."""
+    (tmp_path / "cron.d").mkdir(exist_ok=True)
     unpacked = tmp_path / "bundle"
     if not unpacked.exists():
         bundle(unpacked)
@@ -198,9 +204,41 @@ def install_quickly(host: FakeHost, tmp_path: Path, domain: str = "chat.example.
         registry_user="u",
         token=TOKEN,
         settings={},
+        cron_file=tmp_path / "cron.d" / "support-chatbot",
         health_timeout=0.5,
         retry_every=0.01,
     )
+
+
+def test_the_install_schedules_a_daily_backup_as_the_service_account(
+    host: FakeHost, tmp_path: Path
+) -> None:
+    assert install(host, tmp_path) == 0
+
+    cron = tmp_path / "cron.d" / "support-chatbot"
+    [entry] = [line for line in cron.read_text().splitlines() if line and line[0].isdigit()]
+    minute, hour, day, month, weekday, user, command = entry.split(maxsplit=6)
+    assert (day, month, weekday) == ("*", "*", "*")
+    assert 0 <= int(minute) < 60 and 0 <= int(hour) < 24
+    assert user == "supportchatbot"
+    assert command.startswith(f"{tmp_path / 'opt' / 'sc'} backup ")
+    assert stat.S_IMODE(cron.stat().st_mode) == 0o644
+
+
+def test_the_install_ends_by_asking_for_env_in_the_password_manager(
+    host: FakeHost, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert install(host, tmp_path) == 0
+
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert "password manager" in last
+    assert str(tmp_path / "opt" / ".env") in last
+
+
+def test_a_failed_install_schedules_nothing(tmp_path: Path) -> None:
+    assert install(FakeHost(failing={"docker login"}), tmp_path) == 1
+
+    assert not (tmp_path / "cron.d" / "support-chatbot").exists()
 
 
 def test_sc_imports_only_the_standard_library() -> None:
