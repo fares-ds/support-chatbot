@@ -169,9 +169,9 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 | Concern | Choice |
 | --- | --- |
 | Source | One private GitHub repository, with a root per toolchain: `backend/`, `frontend/`, `deploy/`, `bench/` and `docs/`. Short-lived branches, squash-merged into `main` by pull request ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). |
-| Releases | A `vX.Y.Z` tag on `main` builds every image and the install bundle under one version ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)) |
+| Releases | A `vX.Y.Z` tag on `main` builds every image and the install bundle under one version ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). The Release workflow scans the images before pushing them, and attaches the bundle and its checksum to a GitHub release. |
 | Packaging | Docker images pinned by version, run with Docker Compose |
-| Registry | GitHub Container Registry, private, with a read-only token per install |
+| Registry | GitHub Container Registry, private: `support-chatbot-backend` and `support-chatbot-caddy`, linux/amd64. Each install pulls with its own classic token, `read:packages` only, from a machine account that can read nothing else ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md); procedure in `deploy/README.md`). |
 | Install | The vendor installs from a versioned bundle: the Compose file, an environment template and the server CLI |
 | Server CLI | `sc`: one Python script using only the standard library, run by the host's `python3` (3.10 or later). `report` and `reset-password` run inside the backend image ([ADR-0029](adr/0029-server-cli-in-standard-library-python.md)). |
 | Upgrade | `upgrade <version>`: check, back up, pull, migrate once, restart, verify, and roll back on failure ([ADR-0013](adr/0013-upgrades-and-migrations.md)) |
@@ -179,7 +179,7 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 | Health | A health check on every container, a `status` command, and the vendor's external uptime check on each install's health endpoint |
 | AI report | `report` prints the weekly figures from the turn records |
 | Logs | Structured JSON. Docker log size and file count are capped in the Compose file, so logs cannot fill the disk. |
-| CI | Lint, type checks and tests; an upgrade test from the previous release's database; dependency and image scanning; a check that the generated API client and event types are up to date |
+| CI | Lint, type checks and tests; an upgrade test from the previous release's database; dependency and image scanning with Trivy, failing on high and critical findings that have a fix, also weekly; third-party actions pinned by commit SHA; a check that the generated API client and event types are up to date |
 
 Server CLI commands: `install`, `upgrade <version>`, `backup`, `restore`, `status`, `report`, `reset-password`.
 

@@ -1,0 +1,70 @@
+name: Security
+
+# Scans what installs run for known vulnerabilities (SEC-12): the backend's Python dependencies
+# (and the frontend's JavaScript ones, once frontend/ exists), and the images a release builds. It
+# fails on high and critical findings that have a fix. It also runs every Monday, because new
+# vulnerabilities appear without any change here. The M0 benchmark, which installs never run, is
+# left out.
+
+on:
+  pull_request:
+    paths:
+      - backend/**
+      - deploy/**
+      - frontend/**
+      - .github/workflows/security.yml
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: Dependencies
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan the lockfiles
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          skip-dirs: bench
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  images:
+    name: Images
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the images
+        run: |
+          docker build --platform linux/amd64 --tag support-chatbot-backend:scan backend
+          docker build --platform linux/amd64 --tag support-chatbot-caddy:scan deploy/caddy
+      - name: Scan the backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: support-chatbot-backend:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan the Caddy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: support-chatbot-caddy:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

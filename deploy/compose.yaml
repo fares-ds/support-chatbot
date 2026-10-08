@@ -14,7 +14,8 @@ x-logging: &logging
 
 services:
   caddy:
-    image: caddy:2.11.7-alpine
+    # Caddy with the dashboard's and the widget's files (deploy/caddy/).
+    image: ghcr.io/fares-ds/support-chatbot-caddy:${SC_VERSION:?SC_VERSION is not set}
     restart: unless-stopped
     ports:
       - "${SC_HTTP_PORT:-80}:80"

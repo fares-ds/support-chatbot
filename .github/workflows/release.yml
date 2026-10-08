@@ -1,0 +1,132 @@
+name: Release
+
+# A vX.Y.Z tag on main is a release (ADR-0027). It builds the backend and Caddy images for
+# linux/amd64, scans them, pushes them to GitHub Container Registry under the version, and attaches
+# the install bundle to a GitHub release (OPS-1). Pull requests that change what a release ships
+# run the same build without publishing, and start the bundle.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  pull_request:
+    paths:
+      - backend/**
+      - deploy/**
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+env:
+  BACKEND: ghcr.io/fares-ds/support-chatbot-backend
+  CADDY: ghcr.io/fares-ds/support-chatbot-caddy
+
+jobs:
+  check:
+    name: Images and bundle, without publishing
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: 0.0.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Bundle builder tests
+        run: python3 -m unittest discover --start-directory deploy/tests --verbose
+      - name: Build the images
+        run: |
+          docker build --platform linux/amd64 --tag "$BACKEND:$VERSION" backend
+          docker build --platform linux/amd64 --tag "$CADDY:$VERSION" deploy/caddy
+      - name: Build the bundle
+        run: python3 deploy/build_bundle.py "$VERSION" dist
+      - name: Start the bundle
+        run: |
+          mkdir "$RUNNER_TEMP/install"
+          tar --extract --gzip --file "dist/support-chatbot-$VERSION.tar.gz" --directory "$RUNNER_TEMP/install"
+          cd "$RUNNER_TEMP/install/support-chatbot-$VERSION"
+          cp env.template .env
+          sed -i "s/^SC_DOMAIN=$/SC_DOMAIN=localhost/; s/^SC_POSTGRES_PASSWORD=$/SC_POSTGRES_PASSWORD=$(openssl rand -hex 16)/" .env
+          # Caddy and the worker, and what they wait for: the API, the migration job, Postgres
+          # and Valkey. The model services are left out; the default models take gigabytes.
+          docker compose up --detach --wait --wait-timeout 300 caddy worker
+          docker compose ps --all --format '{{.Service}} {{.Image}} {{.Status}}'
+      - name: Serve the placeholders and the API through Caddy
+        working-directory: ${{ runner.temp }}/install/support-chatbot-${{ env.VERSION }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt "$RUNNER_TEMP/root.crt" && break
+            sleep 2
+          done
+          get() { curl --fail --silent --show-error --cacert "$RUNNER_TEMP/root.crt" "https://localhost$1"; }
+          get / | grep 'The dashboard arrives in M1'
+          get /widget/ | grep 'The chat widget arrives in M1'
+          get /api/health/ready | jq --exit-status '.status == "ok"'
+          # 503 without the model services, which the bundle test leaves out; the worker is up.
+          curl --silent --show-error --cacert "$RUNNER_TEMP/root.crt" https://localhost/api/health \
+            | jq --exit-status '.checks.worker == "ok" and .schema_revision != null'
+      - name: Logs
+        if: failure()
+        working-directory: ${{ runner.temp }}/install/support-chatbot-${{ env.VERSION }}
+        run: docker compose logs --no-color
+
+  publish:
+    name: Publish the release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the GitHub release
+      packages: write # GitHub Container Registry
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: The tag is on main
+        run: |
+          # fetch-depth: 0 fetched origin/main with the tag. Fetching again would fail: checkout
+          # dropped its credentials, and the repository is private.
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Bundle builder tests
+        run: python3 -m unittest discover --start-directory deploy/tests
+      - name: Build the images
+        run: |
+          labels=(
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"
+            --label "org.opencontainers.image.version=$VERSION"
+            --label "org.opencontainers.image.revision=$GITHUB_SHA"
+          )
+          docker build --platform linux/amd64 "${labels[@]}" --tag "$BACKEND:$VERSION" backend
+          docker build --platform linux/amd64 "${labels[@]}" --tag "$CADDY:$VERSION" deploy/caddy
+      - name: Scan the backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.BACKEND }}:${{ env.VERSION }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan the Caddy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.CADDY }}:${{ env.VERSION }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push the images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$BACKEND:$VERSION"
+          docker push "$CADDY:$VERSION"
+          docker logout ghcr.io
+      - name: Publish the bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 deploy/build_bundle.py "$VERSION" dist
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes \
+            "dist/support-chatbot-$VERSION.tar.gz" "dist/support-chatbot-$VERSION.tar.gz.sha256"
