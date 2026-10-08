@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-06, with the release terms from ADR-0027.
+Updated 2026-10-08, with the machine account from ADR-0031.
 
 ## People and roles
 
@@ -32,6 +32,7 @@ Updated 2026-10-06, with the release terms from ADR-0027.
 | Uncalibrated model | An embedding model or reranker whose relevance threshold the vendor has not calibrated. Retrieval applies no cut-off, and the dashboard marks the model ([ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). |
 | Release | A `vX.Y.Z` tag on `main`. It versions every image and the install bundle together ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). |
 | Install bundle | What the vendor installs and upgrades from: the Compose file, the environment template and the server CLI, published with each release (OPS-1). |
+| Machine account | The vendor's second GitHub account. It holds each install's read-only pull token, and can read only our two packages ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md)). |
 
 ## Conversations
 

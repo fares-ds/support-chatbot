@@ -6,6 +6,10 @@ services:
     build: ../backend
     pull_policy: build
 
+  caddy:
+    build: caddy
+    pull_policy: build
+
   # The image the api service builds. Building it here too would label it with both services,
   # and each build would recreate the other's container.
   migrate:

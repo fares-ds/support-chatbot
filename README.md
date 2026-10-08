@@ -14,7 +14,7 @@ Proprietary, not open source ([ADR-0010](docs/adr/0010-proprietary-closed-source
 | [docs/glossary.md](docs/glossary.md) | The words to use in code and screens |
 | `backend/` | The FastAPI API, the Celery worker with Beat, and the Alembic migrations |
 | `frontend/` | Not started. The generated API client comes in M0; the dashboard, widget and widget loader in M1. |
-| `deploy/` | The install bundle: the Compose file and Caddyfile so far. The environment template and server CLI come later in M0. |
+| [deploy/](deploy/) | The install bundle: the Compose file, Caddyfile and environment template, built into a release by `build_bundle.py`; the server CLI comes later in M0. Also the Caddy image and the development Compose files. |
 | `compose.yaml` | The development stack: the install bundle's Compose file, with the backend built from source |
 | [bench/](bench/) | The M0 benchmark harness |
 
@@ -35,4 +35,4 @@ You need Docker and [uv](https://docs.astral.sh/uv/).
 
 ## Workflow
 
-One short-lived branch per issue, squash-merged into `main` by pull request once CI passes. Pull request titles follow Conventional Commits. Releases are `vX.Y.Z` tags ([ADR-0027](docs/adr/0027-repository-layout-and-git-workflow.md)).
+One short-lived branch per issue, squash-merged into `main` by pull request once CI passes. Pull request titles follow Conventional Commits. Releases are `vX.Y.Z` tags ([ADR-0027](docs/adr/0027-repository-layout-and-git-workflow.md)); [deploy/README.md](deploy/README.md) explains how to cut one, and how each install gets its pull token.

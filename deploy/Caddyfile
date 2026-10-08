@@ -9,8 +9,9 @@
 		}
 	}
 
-	# The dashboard and the widget arrive in M1.
+	# The dashboard's and the widget's files, which the Caddy image carries. Placeholders until M1.
 	handle {
-		respond "Support Chatbot" 200
+		root * /srv
+		file_server
 	}
 }
