@@ -52,9 +52,16 @@ BACKUP_TIME = (3, 17)
 
 
 class CommandFailed(Exception):
+    """A command exited non-zero. The message names it and ends with its output's last whole
+    lines, where a traceback says what went wrong."""
+
     def __init__(self, args: Sequence[str], output: str, returncode: int = 1) -> None:
-        super().__init__(f"{' '.join(args[:3])} failed: {output.strip()[-500:]}")
-        self.args_run = list(args)
+        tail = output.strip()
+        if len(tail) > 500:
+            tail = tail[-500:]
+            tail = tail[tail.find("\n") + 1 :] if "\n" in tail else tail
+        detail = f"\n{tail}" if "\n" in tail else f" {tail}"
+        super().__init__(f"{' '.join(args[:3])} failed:{detail}")
         self.returncode = returncode
 
 
@@ -139,6 +146,7 @@ class Host:
         """Runs a command and returns its output. As `user`, with that user's home, so Docker
         keeps the user's registry login. `stdin_from` and `stdout_to` stream a file, such as a
         database dump, in or out; a file it writes is readable only by its owner."""
+        asked = list(args)  # what a failure names, rather than runuser
         if user is not None:
             args = [
                 "runuser",
@@ -172,11 +180,11 @@ class Host:
                     check=False,
                 )
             except FileNotFoundError as error:
-                raise CommandFailed(args, str(error)) from None
+                raise CommandFailed(asked, str(error)) from None
         output = (done.stdout or b"").decode(errors="replace")
         if done.returncode != 0:
             raise CommandFailed(
-                args, done.stderr.decode(errors="replace") or output, done.returncode
+                asked, done.stderr.decode(errors="replace") or output, done.returncode
             )
         return output.strip()
 
