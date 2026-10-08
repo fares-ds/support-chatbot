@@ -72,9 +72,9 @@ A TEI container loads one model, so embeddings and reranking take one container 
 | --- | --- | --- |
 | Language and packaging | Python 3.12, uv | Taken from the earlier projects |
 | Web framework | FastAPI on uvicorn | Serves REST and WebSockets |
-| Database access | SQLAlchemy | Async sessions in the API; synchronous sessions in Celery workers. Do not wrap async code inside workers. |
+| Database access | SQLAlchemy | Async sessions in the API, over asyncpg; synchronous sessions in Celery workers, over psycopg 3. Do not wrap async code inside workers. |
 | Migrations | Alembic | Run once per upgrade, in a one-off container (`python -m app.migrate`), never on application startup. Expand, then contract; no downgrade migrations ([ADR-0013](adr/0013-upgrades-and-migrations.md)). Adding a NOT NULL column needs a server default. A contract step sets `contract` to what the previous release stopped using. CI checks these rules from each migration's source (`tools/migration_rules.py`). Revisions are numbered, `0001` onwards. |
-| Background jobs | Celery, with Valkey as the broker | Set the visibility timeout above the longest job measured in M0, or long jobs such as re-embedding run twice. |
+| Background jobs | Celery, with Valkey as the broker | Jobs are acknowledged after they run, one at a time per worker process, so a job cut short by a crash runs again. Set the visibility timeout (`SC_CELERY_VISIBILITY_TIMEOUT`) above the longest job measured in M0, or long jobs such as re-embedding run twice. A Beat heartbeat every 30 seconds shows that schedules fire and the worker runs them; `/api/health` reports the worker down after 2 minutes without one. |
 | Timed jobs | Celery Beat, inside the worker container | Auto-resolve after 24 idle hours; close after 4 idle days; visitor cleanup after 9 months; knowledge reconciler every 15 minutes |
 | Live delivery | FastAPI WebSockets; Valkey pub/sub between API processes | Clients send over HTTP and receive over the WebSocket (RT-1 to RT-8) |
 | AI turns | Async tasks in the API process | One Valkey lock per conversation. 30 s timeout with external providers; the CPU value comes from M0. On shutdown, wait up to 30 s for running turns; unfinished turns hand off (AI-9). |
@@ -199,7 +199,7 @@ These depend on OneClickDZ's VPS, whose specs are still unknown, so they are mea
 | Classifier mode: embedding check or small model | Accuracy and speed on English, French, Arabic and Darija samples |
 | Default local answer, embedding and rerank models | Quality, speed, memory, license, and TEI compatibility |
 | Prompt budgets for CPU installs | Meeting the CPU latency targets |
-| Celery visibility timeout | The longest job, usually re-embedding |
+| Celery visibility timeout | The longest job, usually re-embedding; 1 hour until then |
 | Minimum CPU, RAM and disk; recommended VPS | Peak memory with the whole stack running together |
 | PDF parser: pdfplumber or Docling | A bake-off on real documents |
 
@@ -231,7 +231,9 @@ The product is proprietary ([ADR-0010](adr/0010-proprietary-closed-source.md)), 
 | --- | --- |
 | FastAPI, SQLAlchemy, Alembic, Pydantic, DSPy | MIT |
 | LiteLLM | MIT, except its separately licensed enterprise directory |
-| Uvicorn, httpx, Celery, Valkey | BSD-3-Clause |
+| Uvicorn, httpx, Celery, Kombu, billiard, Valkey | BSD-3-Clause |
+| redis-py | MIT |
+| psycopg 3 | LGPL-3.0: used unmodified, as a library the image installs, which keeps it replaceable |
 | pdfplumber, python-docx, markdown-it-py, Docling | MIT |
 | trafilatura | Apache-2.0 (from version 1.8.0) |
 | PostgreSQL, pgvector | PostgreSQL License |

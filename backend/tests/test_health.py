@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -19,6 +20,7 @@ async def test_healthy_when_every_check_passes(app: FastAPI, client: httpx.Async
         "status": "ok",
         "checks": {"postgres": "ok", "valkey": "ok"},
         "schema_revision": None,
+        "worker_heartbeat": None,
     }
 
 
@@ -32,6 +34,7 @@ async def test_unhealthy_when_a_check_fails(app: FastAPI, client: httpx.AsyncCli
         "status": "down",
         "checks": {"postgres": "ok", "valkey": "down"},
         "schema_revision": None,
+        "worker_heartbeat": None,
     }
 
 
@@ -50,6 +53,7 @@ async def test_readiness_ignores_everything_but_what_serving_needs(
         "status": "down",
         "checks": {"postgres": "ok", "ollama": "down"},
         "schema_revision": None,
+        "worker_heartbeat": None,
     }
 
 
@@ -138,6 +142,7 @@ async def test_a_revision_that_cannot_be_read_is_null_and_leaves_health_alone(
         "status": "ok",
         "checks": {"postgres": "ok"},
         "schema_revision": None,
+        "worker_heartbeat": None,
     }
 
 
@@ -149,3 +154,43 @@ async def test_readiness_does_not_report_the_revision(
     response = await client.get("/api/health/ready")
 
     assert "schema_revision" not in response.json()
+
+
+NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+
+
+def beat_at(when: datetime | None) -> health.Heartbeat:
+    async def last_beat() -> datetime | None:
+        return when
+
+    return last_beat
+
+
+@pytest.mark.parametrize(
+    ("last_beat", "status"),
+    [
+        (NOW - timedelta(seconds=10), "ok"),
+        (NOW - timedelta(seconds=121), "down"),
+        (None, "down"),
+    ],
+)
+async def test_the_worker_is_down_when_its_last_beat_is_stale_or_missing(
+    last_beat: datetime | None, status: str
+) -> None:
+    check = health.heartbeat_check(
+        beat_at(last_beat), stale_after=timedelta(seconds=120), clock=lambda: NOW
+    )
+
+    report = await health.run_checks({"worker": check})
+
+    assert report.checks == {"worker": status}
+
+
+async def test_health_reports_when_the_worker_last_beat(
+    app: FastAPI, client: httpx.AsyncClient
+) -> None:
+    use_checks(app, {"postgres": passes}, worker_heartbeat=beat_at(NOW))
+
+    response = await client.get("/api/health")
+
+    assert response.json()["worker_heartbeat"] == "2026-10-08T12:00:00Z"

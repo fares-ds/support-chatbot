@@ -59,15 +59,19 @@ jobs:
           df -h /
       - name: Start the stack
         run: docker compose up --build --detach --wait --wait-timeout 900
-      - name: The migration job ran before the API
+      - name: The migration job ran before the API and the worker
         run: |
           docker compose ps --all --format '{{.Service}} {{.State}} {{.ExitCode}}' migrate | tee "$RUNNER_TEMP/migrate.txt"
           test "$(cat "$RUNNER_TEMP/migrate.txt")" = "migrate exited 0"
-          docker compose logs --no-color api | grep -q alembic && { echo "The API migrated on startup"; exit 1; } || true
           migrated=$(docker inspect --format '{{.State.FinishedAt}}' "$(docker compose ps --all --quiet migrate)")
-          started=$(docker inspect --format '{{.State.StartedAt}}' "$(docker compose ps --quiet api)")
-          echo "migrate finished $migrated; api started $started"
-          test "$(date -d "$migrated" +%s%N)" -le "$(date -d "$started" +%s%N)"
+          for service in api worker; do
+            if docker compose logs --no-color "$service" | grep -q alembic; then
+              echo "$service migrated on startup"; exit 1
+            fi
+            started=$(docker inspect --format '{{.State.StartedAt}}' "$(docker compose ps --quiet "$service")")
+            echo "migrate finished $migrated; $service started $started"
+            test "$(date -d "$migrated" +%s%N)" -le "$(date -d "$started" +%s%N)"
+          done
       - name: Health through Caddy over HTTPS
         run: |
           for attempt in 1 2 3 4 5; do
@@ -76,12 +80,28 @@ jobs:
           done
           curl --fail --silent --show-error --retry 5 --retry-all-errors \
             --cacert "$RUNNER_TEMP/caddy-root.crt" https://localhost/api/health | tee "$RUNNER_TEMP/health.json"
-          jq --exit-status '.status == "ok" and .checks == {
-            "postgres": "ok", "valkey": "ok", "tei_embed": "ok", "tei_rerank": "ok", "ollama": "ok"
+          jq --exit-status '.status == "ok" and .worker_heartbeat != null and .checks == {
+            "postgres": "ok", "valkey": "ok", "tei_embed": "ok", "tei_rerank": "ok", "ollama": "ok",
+            "worker": "ok"
           }' "$RUNNER_TEMP/health.json"
           # Revisions are numbered, so the newest file is the head.
           head=$(ls backend/migrations/versions | grep -E '^[0-9]+_' | sort | tail -n 1 | cut -d _ -f 1)
           jq --exit-status --arg head "$head" '.schema_revision == $head' "$RUNNER_TEMP/health.json"
+      - name: Beat schedules the worker's heartbeat
+        run: |
+          beat() {
+            curl --fail --silent --cacert "$RUNNER_TEMP/caddy-root.crt" https://localhost/api/health \
+              | jq --raw-output .worker_heartbeat
+          }
+          first=$(beat)
+          echo "Last beat: $first"
+          for attempt in $(seq 30); do
+            [ "$(beat)" != "$first" ] && break
+            sleep 3
+          done
+          echo "Next beat: $(beat)"
+          test "$(beat)" != "$first"
+          docker compose logs --no-color worker | grep 'Sending due task heartbeat'
       - name: Migrating again changes nothing
         run: |
           schema() {
@@ -154,6 +174,12 @@ jobs:
           cat "$RUNNER_TEMP/ready.json"
           test "$code" = 503
           jq --exit-status '.status == "down" and .checks == {"postgres": "ok", "valkey": "down"}' "$RUNNER_TEMP/ready.json"
+      - name: The worker is unhealthy without Valkey
+        run: |
+          # Valkey is still stopped from the previous step.
+          if docker compose exec -T worker python -m app.worker_healthcheck; then
+            echo "The worker's health check passed without Valkey"; exit 1
+          fi
       - name: Logs
         if: failure()
         run: docker compose logs --no-color

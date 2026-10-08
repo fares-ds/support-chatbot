@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     tei_rerank_url: str = "http://tei-rerank"
     ollama_url: str = "http://ollama:11434"
 
+    # The worker: Celery with Beat, on Valkey (OPS-10, OPS-11).
+    celery_visibility_timeout: int = 3600
+    """Seconds before Valkey hands an unacknowledged job to another worker, so it must stay above
+    the longest job. A placeholder until the M0 benchmark measures re-embedding a knowledge base
+    at its 20,000-chunk limit (#17)."""
+    worker_concurrency: int = 2
+    worker_heartbeat_seconds: int = 30
+    worker_heartbeat_stale_seconds: int = 120
+    """The worker counts as down after this long without a beat: four missed beats."""
+
     @field_validator("postgres_password")
     @classmethod
     def _not_empty(cls, value: SecretStr) -> SecretStr:
@@ -41,8 +51,17 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> URL:
+        """For the API's async sessions."""
+        return self._database_url("postgresql+asyncpg")
+
+    @property
+    def sync_database_url(self) -> URL:
+        """For the worker's synchronous sessions (ADR-0024, item 8)."""
+        return self._database_url("postgresql+psycopg")
+
+    def _database_url(self, driver: str) -> URL:
         return URL.create(
-            "postgresql+asyncpg",
+            driver,
             username=self.postgres_user,
             password=self.postgres_password.get_secret_value(),
             host=self.postgres_host,
