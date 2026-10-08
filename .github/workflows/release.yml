@@ -150,8 +150,9 @@ jobs:
             --tuples-only --no-align --command 'SELECT note FROM ci_marker')" = 'before the backup'
           test "$(sudo docker compose exec -T api cat /data/files/kb/marker.txt)" = marker
           test "$(sudo docker compose ps --format '{{.Health}}' | grep -c '^healthy$')" = 8
-          curl --fail --silent --show-error --cacert caddy-root.crt https://localhost/api/health \
-            | jq --exit-status '.status == "ok"'
+          sudo cat caddy-root.crt > "$RUNNER_TEMP/root.crt"  # the service account's file
+          curl --fail --silent --show-error --cacert "$RUNNER_TEMP/root.crt" \
+            https://localhost/api/health | jq --exit-status '.status == "ok"'
       - name: Logs
         if: failure()
         run: |
