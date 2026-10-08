@@ -3,7 +3,8 @@ name: Release
 # A vX.Y.Z tag on main is a release (ADR-0027). It builds the backend and Caddy images for
 # linux/amd64, scans them, pushes them to GitHub Container Registry under the version, and attaches
 # the install bundle to a GitHub release (OPS-1). Pull requests that change what a release ships
-# run the same build without publishing, and install the bundle with sc on the runner.
+# run the same build without publishing, and install the bundle with sc on the runner. Both run the
+# upgrade test from the previous release (OPS-4); a release publishes only once it passes.
 
 on:
   push:
@@ -45,7 +46,7 @@ jobs:
         run: |
           uvx ruff@0.16.10 check .
           uvx ruff@0.16.10 format --check .
-          uv run --no-project --python 3.10 --with mypy==2.4.0 mypy sc build_bundle.py
+          uv run --no-project --python 3.10 --with mypy==2.4.0 mypy sc build_bundle.py upgrade_test.py
       - name: Make room for the Ollama image, and for the second install's disk check
         run: |
           # sc install wants 30 GB free; the restore test installs twice on one runner, the second
@@ -164,6 +165,33 @@ jobs:
             cd /opt/support-chatbot && sudo docker compose logs --no-color
           fi
 
+  upgrade:
+    # OPS-4: the candidate upgrades the previous release's seeded database, and the previous
+    # release still runs on the result, which sc upgrade's rollback relies on (ADR-0013). On a
+    # release tag, publish runs the same test on the images it then pushes.
+    name: Upgrade from the previous release
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # the previous release's bundle
+      packages: read # its images
+    env:
+      VERSION: 0.0.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the candidate's backend image
+        run: docker build --platform linux/amd64 --tag "$BACKEND:$VERSION" backend
+      - name: Upgrade the previous release's seeded database
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          python3 deploy/upgrade_test.py --candidate "$VERSION"
+
   publish:
     name: Publish the release
     if: github.event_name == 'push'
@@ -212,6 +240,14 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+      - name: Upgrade the previous release's seeded database, with these images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          python3 deploy/upgrade_test.py --candidate "$VERSION" --release-tag "$GITHUB_REF_NAME"
       - name: Push the images
         env:
           GH_TOKEN: ${{ github.token }}

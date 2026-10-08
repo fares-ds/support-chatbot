@@ -17,6 +17,7 @@ depends_on: str | Sequence[str] | None = ${repr(depends_on)}
 # release keeps working on the new schema. Dropping or renaming a table or column is the contract
 # step for something the previous release had already stopped using, and says what, for CI:
 # contract = "Release 1.4 stopped reading users.legacy_name"
+# A new table needs rows in backend/tests/upgrade_seeds/<revision>.sql, for the upgrade test.
 
 
 def upgrade() -> None:
