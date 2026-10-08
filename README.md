@@ -14,7 +14,7 @@ Proprietary, not open source ([ADR-0010](docs/adr/0010-proprietary-closed-source
 | [docs/glossary.md](docs/glossary.md) | The words to use in code and screens |
 | `backend/` | The FastAPI API, the Celery worker with Beat, and the Alembic migrations |
 | `frontend/` | Not started. The generated API client comes in M0; the dashboard, widget and widget loader in M1. |
-| [deploy/](deploy/) | The install bundle: the Compose file, Caddyfile and environment template, built into a release by `build_bundle.py`; the server CLI comes later in M0. Also the Caddy image and the development Compose files. |
+| [deploy/](deploy/) | The install bundle: the Compose file, Caddyfile, environment template and `sc`, the server CLI, built into a release by `build_bundle.py`. Also the Caddy image and the development Compose files. |
 | `compose.yaml` | The development stack: the install bundle's Compose file, with the backend built from source |
 | [bench/](bench/) | The M0 benchmark harness |
 
@@ -31,6 +31,7 @@ You need Docker and [uv](https://docs.astral.sh/uv/).
   - Dropping or renaming a table or column is the contract step, one release later: the migration sets `contract` to what the previous release had stopped using.
   - `downgrade()` stays empty; a rollback restores the pre-upgrade backup.
   - CI checks these rules: `uv run python -m tools.migration_rules migrations/versions`.
+- In `deploy/`: `uv run --no-project --python 3.10 --with pytest pytest` tests `sc` and the bundle builder on the oldest Python `sc` supports; `uvx ruff check .` lints them.
 - The M0 benchmark times the AI pipeline against the running stack: see [bench/README.md](bench/README.md).
 
 ## Workflow

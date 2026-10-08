@@ -159,7 +159,7 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 
 - Only Caddy publishes ports. Ollama, TEI, Postgres and Valkey listen on the internal Docker network only (SEC-14).
 - TLS comes from Caddy's automatic certificates (SEC-8).
-- The identity secret and provider API keys are encrypted in Postgres. The encryption key sits in the server's environment file, readable only by the service account (SEC-6).
+- The identity secret and provider API keys are encrypted in Postgres. The encryption key sits in the server's environment file, readable only by the service account, `supportchatbot` (SEC-6, [ADR-0032](adr/0032-dedicated-service-account.md)).
 - Web import fetches only through the guarded HTTP client (SEC-13).
 - Logs carry IDs, never message or document text (SEC-10).
 - Nothing is sent to the vendor. External providers receive conversation text and knowledge excerpts only when the Owner chooses one (SEC-9).
@@ -172,7 +172,7 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 | Releases | A `vX.Y.Z` tag on `main` builds every image and the install bundle under one version ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). The Release workflow scans the images before pushing them, and attaches the bundle and its checksum to a GitHub release. |
 | Packaging | Docker images pinned by version, run with Docker Compose |
 | Registry | GitHub Container Registry, private: `support-chatbot-backend` and `support-chatbot-caddy`, linux/amd64. Each install pulls with its own classic token, `read:packages` only, from a machine account that can read nothing else ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md); procedure in `deploy/README.md`). |
-| Install | The vendor installs from a versioned bundle: the Compose file, an environment template and the server CLI |
+| Install | The vendor installs from a versioned bundle: the Compose file, an environment template and the server CLI. `sudo ./sc install --domain … --registry-user …` checks the prerequisites before changing anything, creates the service account and `/opt/support-chatbot`, writes `.env` with generated secrets (mode 600), logs in to the registry with the install's token, pulls, migrates, starts, and waits for every health check over HTTPS ([ADR-0032](adr/0032-dedicated-service-account.md)). |
 | Server CLI | `sc`: one Python script using only the standard library, run by the host's `python3` (3.10 or later). `report` and `reset-password` run inside the backend image ([ADR-0029](adr/0029-server-cli-in-standard-library-python.md)). |
 | Upgrade | `upgrade <version>`: check, back up, pull, migrate once, restart, verify, and roll back on failure ([ADR-0013](adr/0013-upgrades-and-migrations.md)) |
 | Backups | The host's cron runs `backup` daily: a database dump plus the stored files, encrypted by restic and sent to an off-server repository (destination still open) |

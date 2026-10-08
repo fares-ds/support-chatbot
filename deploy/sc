@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""sc, the server CLI (ADR-0029): the vendor runs it on an install's server.
+
+    sudo ./sc install --domain chat.example.com --registry-user fares-ds-installs
+
+One file, standard library only, run by the host's python3 (3.10 or later), so a fresh server
+needs nothing beyond Docker. `install` is its first command (#8); `upgrade`, `backup`, `restore`,
+`status`, `report` and `reset-password` follow.
+"""
+
+import sys
+
+if sys.version_info < (3, 10):  # noqa: UP036 - a plain message, before anything 3.9 cannot parse
+    sys.exit(f"sc needs Python 3.10 or later; this server has {sys.version.split()[0]}.")
+
+import argparse
+import base64
+import getpass
+import os
+import re
+import secrets
+import shutil
+import socket
+import ssl
+import subprocess
+import time
+import urllib.request
+from collections.abc import Callable, Sequence
+from pathlib import Path
+
+INSTALL_DIR = Path("/opt/support-chatbot")
+SERVICE_USER = "supportchatbot"
+"""Owns the install and runs its containers; only it can read the secrets (SEC-6)."""
+REGISTRY = "ghcr.io"
+MIN_COMPOSE = (2, 22)
+"""For `docker compose pull --policy`."""
+MIN_FREE_GB = 30
+"""The images, two TEI models and an Ollama model, with room to spare. A placeholder until the
+M0 benchmark publishes the minimum specs (OPS-2)."""
+BUNDLE_FILES = ("compose.yaml", "Caddyfile", "env.template", "sc")
+
+
+class CommandFailed(Exception):
+    def __init__(self, args: Sequence[str], output: str) -> None:
+        super().__init__(f"{' '.join(args[:3])} failed: {output.strip()[-500:]}")
+        self.args_run = list(args)
+
+
+class Host:
+    """Everything sc does to the server goes through here, so tests can fake it."""
+
+    def is_root(self) -> bool:
+        return os.geteuid() == 0
+
+    def python_version(self) -> tuple[int, int]:
+        return sys.version_info[:2]
+
+    def free_bytes(self, path: Path) -> int:
+        while not path.exists():
+            path = path.parent
+        return shutil.disk_usage(path).free
+
+    def port_busy(self, port: int) -> bool:
+        for family, address in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+            with socket.socket(family, socket.SOCK_STREAM) as probe:
+                probe.settimeout(1)
+                try:
+                    if probe.connect_ex((address, port)) == 0:
+                        return True
+                except OSError:
+                    continue
+        return False
+
+    def user_exists(self, name: str) -> bool:
+        import pwd
+
+        try:
+            pwd.getpwnam(name)
+        except KeyError:
+            return False
+        return True
+
+    def add_system_user(self, name: str, home: Path) -> None:
+        self.run(
+            [
+                "useradd",
+                "--system",
+                "--home-dir",
+                str(home),
+                "--shell",
+                "/usr/sbin/nologin",
+                "--groups",
+                "docker",
+                name,
+            ]
+        )
+
+    def group_exists(self, name: str) -> bool:
+        import grp
+
+        try:
+            grp.getgrnam(name)
+        except KeyError:
+            return False
+        return True
+
+    def add_to_group(self, user: str, group: str) -> None:
+        self.run(["usermod", "--append", "--groups", group, user])
+
+    def chown(self, path: Path, user: str) -> None:
+        shutil.chown(path, user, user)
+
+    def run(
+        self,
+        args: list[str],
+        *,
+        user: str | None = None,
+        input: str | None = None,
+        cwd: Path | None = None,
+    ) -> str:
+        """Runs a command and returns its output. As `user`, with that user's home, so Docker
+        keeps the user's registry login."""
+        if user is not None:
+            args = [
+                "runuser",
+                "--login",
+                user,
+                "--shell",
+                "/bin/sh",
+                "--command",
+                _shell_words(args, cwd),
+            ]
+            cwd = None
+        try:
+            done = subprocess.run(
+                args, input=input, cwd=cwd, capture_output=True, text=True, check=False
+            )
+        except FileNotFoundError as error:
+            raise CommandFailed(args, str(error)) from None
+        if done.returncode != 0:
+            raise CommandFailed(args, done.stderr or done.stdout)
+        return done.stdout.strip()
+
+    def fetch(self, url: str, cafile: Path | None) -> str:
+        if not url.startswith("https://"):  # sc builds every URL it fetches
+            raise ValueError(f"not an https URL: {url}")
+        context = ssl.create_default_context(cafile=str(cafile) if cafile else None)
+        with urllib.request.urlopen(url, timeout=10, context=context) as response:  # noqa: S310
+            body: bytes = response.read()
+        return body.decode()
+
+
+def _shell_words(args: Sequence[str], cwd: Path | None) -> str:
+    import shlex
+
+    command = " ".join(shlex.quote(arg) for arg in args)
+    return f"cd {shlex.quote(str(cwd))} && {command}" if cwd else command
+
+
+def prerequisite_problems(
+    host: Host,
+    bundle: Path,
+    install_dir: Path,
+    *,
+    ports: Sequence[int],
+    min_free_gb: float = MIN_FREE_GB,
+) -> list[str]:
+    """Everything the install needs, checked before it changes anything. Plain messages, one
+    per missing prerequisite."""
+    problems = []
+    if not host.is_root():
+        problems.append("Run sc install with sudo: it creates the service account and /opt.")
+    if host.python_version() < (3, 10):
+        problems.append("Python 3.10 or later is needed.")
+    docker_root = None
+    try:
+        host.run(["docker", "version", "--format", "{{.Server.Version}}"])
+        docker_root = Path(host.run(["docker", "info", "--format", "{{.DockerRootDir}}"]))
+    except CommandFailed:
+        problems.append("Docker is not installed or not running: install Docker Engine.")
+    else:
+        if not host.group_exists("docker"):
+            problems.append(
+                "The docker group is missing, so the service account cannot use Docker:"
+                " install Docker Engine from Docker's apt repository, not as a snap."
+            )
+        try:
+            compose = host.run(["docker", "compose", "version", "--short"])
+        except CommandFailed:
+            problems.append("Docker Compose is not installed: install the compose plugin.")
+        else:
+            if _version(compose) < MIN_COMPOSE:
+                problems.append(
+                    f"Docker Compose {'.'.join(map(str, MIN_COMPOSE))} or later is needed;"
+                    f" this server has {compose}."
+                )
+    free_gb = host.free_bytes(install_dir) / 1024**3
+    if free_gb < min_free_gb:
+        problems.append(
+            f"{min_free_gb:.0f} GB of free disk is needed for the images and models;"
+            f" {free_gb:.0f} GB is free."
+        )
+    if docker_root is not None:
+        docker_free_gb = host.free_bytes(docker_root) / 1024**3
+        if docker_free_gb < min_free_gb:
+            problems.append(
+                f"{min_free_gb:.0f} GB of free space is needed in {docker_root}, where Docker"
+                f" keeps the images and models; {docker_free_gb:.0f} GB is free."
+            )
+    for port in ports:
+        if host.port_busy(port):
+            problems.append(f"Something already listens on port {port}; Caddy needs it.")
+    for name in BUNDLE_FILES:
+        if not (bundle / name).exists():
+            problems.append(f"The bundle is missing {name}: unpack the whole release archive.")
+    return problems
+
+
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
+
+
+GENERATED: dict[str, Callable[[], str]] = {
+    "SC_POSTGRES_PASSWORD": lambda: secrets.token_hex(32),
+    "SC_ENCRYPTION_KEY": lambda: base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
+}
+"""Secrets sc generates for each install, never prints, and never takes as arguments, which
+shell history and `ps` would keep."""
+_SETTING = re.compile(r"^SC_[A-Z0-9_]+$")
+
+
+def parse_settings(given: Sequence[str]) -> dict[str, str]:
+    """`--set KEY=VALUE` arguments: settings the environment template lists, such as the models
+    CI installs."""
+    settings = {}
+    for item in given:
+        key, equals, value = item.partition("=")
+        if not equals:
+            raise ValueError(f"--set {item}: use KEY=VALUE")
+        if not _SETTING.match(key):
+            raise ValueError(f"--set {key}: settings start with SC_")
+        if "\n" in value or "\r" in value:
+            raise ValueError(f"--set {key}: a value is one line")
+        if key in GENERATED or key == "SC_DOMAIN":
+            raise ValueError(f"--set {key}: sc generates it, or takes it from --domain")
+        if key in ("SC_HTTP_PORT", "SC_HTTPS_PORT") and not (
+            value.isdigit() and 1 <= int(value) <= 65535
+        ):
+            raise ValueError(f"--set {key}={value}: a port is a number from 1 to 65535")
+        settings[key] = value
+    return settings
+
+
+_HOST_NAME = re.compile(
+    r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
+)
+
+
+def check_domain(domain: str) -> str:
+    """The domain the business points at this server: a host name, nothing more."""
+    if not _HOST_NAME.match(domain):
+        raise ValueError(f"--domain {domain!r}: give a host name, such as chat.example.com")
+    return domain
+
+
+def write_env(
+    host: Host, path: Path, template: str, *, domain: str, settings: dict[str, str], owner: str
+) -> bool:
+    """Writes the install's environment file, readable only by `owner`. The first time, from
+    the bundle's template, with new secrets; returns True. On a rerun it keeps the file's
+    secrets, which the install's data depends on (SEC-6), and takes the domain and settings
+    given now, so a corrected typo reaches the install; returns False."""
+    values = {"SC_DOMAIN": domain, **settings}
+    first = not path.exists()
+    if first:
+        values |= {key: make() for key, make in GENERATED.items()}
+        lines = template.splitlines()
+    else:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    written = []
+    for line in lines:
+        match = re.match(r"^#?\s*(SC_[A-Z0-9_]+)=", line)
+        if match and match.group(1) in values:
+            line = f"{match.group(1)}={values.pop(match.group(1))}"
+        written.append(line)
+    written += [f"{key}={value}" for key, value in values.items()]  # settings not listed yet
+    partial = path.with_name(path.name + ".partial")
+    partial.unlink(missing_ok=True)
+    descriptor = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+        file.write("\n".join(written) + "\n")
+    os.chmod(partial, 0o600)  # whatever the umask
+    os.replace(partial, path)
+    host.chown(path, owner)
+    return first
+
+
+def read_env(path: Path) -> dict[str, str]:
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if re.match(r"^SC_[A-Z0-9_]+=", line):
+            key, _, value = line.partition("=")
+            values[key] = value
+    return values
+
+
+CADDY_ROOT = "/data/caddy/pki/authorities/local/root.crt"
+"""Caddy's own certificate authority, which signs `localhost` (CI's installs)."""
+
+
+def install(
+    host: Host,
+    *,
+    bundle: Path,
+    install_dir: Path,
+    domain: str,
+    registry_user: str,
+    token: str,
+    settings: dict[str, str],
+    health_timeout: float = 300,
+    retry_every: float = 5,
+) -> int:
+    """From a fresh server to a healthy install (US-1, OPS-1). Returns the exit status."""
+    marker = install_dir / ".installed"
+    if marker.exists():
+        _fail(
+            f"Support Chatbot is already installed in {install_dir}. sc install never"
+            " replaces an install's secrets; use sc upgrade."
+        )
+        return 1
+    # A rerun after a failed step: the stack it started may hold the ports itself.
+    resuming = (install_dir / ".env").exists()
+    ports = (int(settings.get("SC_HTTP_PORT", 80)), int(settings.get("SC_HTTPS_PORT", 443)))
+    problems = prerequisite_problems(host, bundle, install_dir, ports=() if resuming else ports)
+    if problems:
+        for problem in problems:
+            _fail(problem)
+        _fail("Nothing was changed.")
+        return 1
+
+    if host.user_exists(SERVICE_USER):
+        host.add_to_group(SERVICE_USER, "docker")
+    else:
+        host.add_system_user(SERVICE_USER, install_dir)
+        _say(f"Created the service account {SERVICE_USER}.")
+    install_dir.mkdir(parents=True, exist_ok=True)
+    host.chown(install_dir, SERVICE_USER)
+    for name in (*BUNDLE_FILES, "README.md"):
+        source = bundle / name
+        if source.exists() and source.resolve() != (install_dir / name).resolve():
+            shutil.copy2(source, install_dir / name)
+            host.chown(install_dir / name, SERVICE_USER)
+    template = (install_dir / "env.template").read_text(encoding="utf-8")
+    if write_env(
+        host, install_dir / ".env", template, domain=domain, settings=settings, owner=SERVICE_USER
+    ):
+        _say(f"Wrote {install_dir / '.env'} with new secrets, readable only by {SERVICE_USER}.")
+    else:
+        _say(f"Kept the secrets in {install_dir / '.env'}, and updated its settings.")
+    https_port = int(read_env(install_dir / ".env").get("SC_HTTPS_PORT", "443"))
+
+    def docker(*args: str, input: str | None = None) -> str:
+        return host.run(["docker", *args], user=SERVICE_USER, input=input, cwd=install_dir)
+
+    steps: list[tuple[str, Callable[[], object]]] = [
+        (
+            f"Logging in to {REGISTRY} as {registry_user}",
+            lambda: docker(
+                "login", REGISTRY, "--username", registry_user, "--password-stdin", input=token
+            ),
+        ),
+        (
+            "Pulling the pinned images",
+            lambda: docker("compose", "pull", "--policy", "missing", "--quiet"),
+        ),
+        ("Migrating the database", lambda: docker("compose", "run", "--rm", "migrate")),
+        (
+            "Starting the stack and waiting for every health check",
+            lambda: docker("compose", "up", "--detach", "--wait", "--wait-timeout", "1800"),
+        ),
+    ]
+    try:
+        for label, step in steps:
+            _say(f"{label}...")
+            step()
+        _say(f"Checking https://{domain} ...")
+        copy_root = None
+        if domain == "localhost":
+            cafile = install_dir / "caddy-root.crt"
+
+            def copy_root() -> Path:
+                docker("compose", "cp", f"caddy:{CADDY_ROOT}", str(cafile))
+                return cafile
+
+        _wait_healthy(host, _health_url(domain, https_port), copy_root, health_timeout, retry_every)
+    except CommandFailed as error:
+        _fail(str(error))
+        _fail(
+            "The install stopped. Fix the cause and run sc install again: it keeps the"
+            " secrets it wrote."
+        )
+        return 1
+    except TimeoutError as error:
+        _fail(str(error))
+        return 1
+    version = bundle_version((install_dir / "compose.yaml").read_text(encoding="utf-8"))
+    marker.write_text(f"version={version}\ninstalled={time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n")
+    host.chown(marker, SERVICE_USER)
+    _say(f"Support Chatbot {version} is installed and healthy at https://{domain}.")
+    return 0
+
+
+def bundle_version(compose: str) -> str:
+    match = re.search(r"ghcr\.io/fares-ds/support-chatbot-backend:(\d+\.\d+\.\d+)", compose)
+    return match.group(1) if match else "unknown"
+
+
+def _health_url(domain: str, https_port: int) -> str:
+    port = "" if https_port == 443 else f":{https_port}"
+    return f"https://{domain}{port}/api/health"
+
+
+def _wait_healthy(
+    host: Host,
+    url: str,
+    copy_root: Callable[[], Path] | None,
+    timeout: float,
+    retry_every: float,
+) -> None:
+    """Every service healthy through Caddy, over HTTPS. Caddy may still be obtaining its
+    certificate, or for localhost still making its own certificate authority, so this
+    retries."""
+    import json
+
+    deadline = time.monotonic() + timeout
+    cafile = None
+    last = "no answer"
+    while True:
+        try:
+            if copy_root is not None and cafile is None:
+                cafile = copy_root()
+            report = json.loads(host.fetch(url, cafile))
+            if report.get("status") == "ok":
+                return
+            down = [name for name, state in report.get("checks", {}).items() if state != "ok"]
+            last = f"down: {', '.join(down) or 'unknown'}"
+        except (OSError, ValueError, CommandFailed) as error:
+            last = str(error)
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"{url} is not healthy ({last}).")
+        time.sleep(retry_every)
+
+
+def _say(message: str) -> None:
+    print(message, flush=True)
+
+
+def _fail(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def _token(path: str | None) -> str:
+    """The install's registry token: from a file, or typed without echo. Never an argument."""
+    if path:
+        return Path(path).read_text(encoding="utf-8").strip()
+    return getpass.getpass(f"Read-only {REGISTRY} token for this install: ").strip()
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="sc", description="Support Chatbot's server CLI.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    setup = commands.add_parser("install", help="install Support Chatbot on this server")
+    setup.add_argument("--domain", required=True, help="the domain pointing at this server")
+    setup.add_argument("--registry-user", required=True, help="the machine account (ADR-0031)")
+    setup.add_argument(
+        "--token-file", help="a file holding the install's registry token (default: ask)"
+    )
+    setup.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="a setting from env.template, such as SC_EMBEDDING_MODEL=...",
+    )
+    arguments = parser.parse_args(argv)
+    try:
+        settings = parse_settings(arguments.set)
+        check_domain(arguments.domain)
+    except ValueError as error:
+        parser.error(str(error))
+    return install(
+        Host(),
+        bundle=Path(__file__).resolve().parent,
+        install_dir=INSTALL_DIR,
+        domain=arguments.domain,
+        registry_user=arguments.registry_user,
+        token=_token(arguments.token_file),
+        settings=settings,
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main())

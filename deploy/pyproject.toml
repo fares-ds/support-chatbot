@@ -1,0 +1,22 @@
+# Development settings for deploy/'s Python: sc, the server CLI (ADR-0029), and the bundle
+# builder. Neither has dependencies; this file never ships in the bundle.
+
+[tool.ruff]
+line-length = 100
+target-version = "py310" # sc runs on the host's python3, 3.10 or later
+extend-include = ["sc"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF"]
+# sc and the builder run fixed commands, with arguments sc builds, never a shell (S603, S607).
+ignore = ["S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "E402"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
