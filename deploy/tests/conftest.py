@@ -3,8 +3,11 @@ it drives."""
 
 import importlib.machinery
 import importlib.util
+import re
 import sys
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -49,6 +52,7 @@ class Snapshot:
     """The files sc staged in backup/, by name."""
     stored: dict[str, bytes]
     """The files volume, by path."""
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -85,7 +89,8 @@ class FakeHost:
     """Commands that fail this many times before they work, by their first three words."""
     groups: dict[str, set[str]] = field(default_factory=dict)
     """Group members added by sc."""
-    health: str = '{"status": "ok"}'
+    health: str | None = None
+    """What /api/health answers; None: the running release's own health (below)."""
     ran: list[Ran] = field(default_factory=list)
     owners: dict[Path, str] = field(default_factory=dict)
     database: bytes = b"PGDMP the database"
@@ -95,6 +100,20 @@ class FakeHost:
     queue: list[str] = field(default_factory=list)
     """Jobs waiting in Valkey."""
     repository: FakeRepository = field(default_factory=FakeRepository)
+    running: str | None = None
+    """The release whose containers run, from the Compose file `up` used."""
+    schema: str | None = None
+    """The release whose migration job last changed the schema."""
+    failing_migrations: set[str] = field(default_factory=set)
+    """Releases whose migration job fails."""
+    unhealthy: set[str] = field(default_factory=set)
+    """Releases that never report healthy."""
+    breaking: set[str] = field(default_factory=set)
+    """Releases whose migration breaks the releases before them."""
+    silent: set[str] = field(default_factory=set)
+    """Releases whose worker never writes a heartbeat."""
+    last_beat: float = field(default_factory=time.time)
+    """When a worker last beat: on starting, and once more as it stops."""
 
     def is_root(self) -> bool:
         return self.root
@@ -153,7 +172,20 @@ class FakeHost:
             return "OK"
         if "pg_restore" in args and stdin_from is not None:
             self.database = stdin_from.read_bytes()
+            self.schema = None  # the backup's own schema
             return ""
+        if args[:2] == ["docker", "compose"] and cwd is not None:
+            release = _compose_release(args, cwd)
+            if args[2:5] == ["run", "--rm", "migrate"]:
+                if release in self.failing_migrations:
+                    raise sc.CommandFailed(args, f"migration of {release} failed")
+                self.schema = release
+            elif "stop" in args:
+                self.last_beat = time.time()  # the old worker's last beat, as it stops
+            elif "up" in args:
+                self.running = release
+                if release not in self.silent:
+                    self.last_beat = time.time()
         if args[:3] == ["docker", "compose", "run"] and "restic" in args:
             assert cwd is not None
             return self._restic(args, args[args.index("restic") + 1 :], cwd / "backup", stdout_to)
@@ -171,7 +203,14 @@ class FakeHost:
 
     def fetch(self, url: str, cafile: Path | None) -> str:
         self.ran.append(Ran(["fetch", url], None, None, None))
-        return self.health
+        if self.health is not None:
+            return self.health
+        release = self.running
+        broken = self.schema in self.breaking and release != self.schema
+        if release in self.unhealthy or broken:
+            return '{"status": "down", "checks": {"postgres": "ok", "worker": "down"}}'
+        beat = datetime.fromtimestamp(self.last_beat, timezone.utc).isoformat()
+        return f'{{"status": "ok", "checks": {{"postgres": "ok"}}, "worker_heartbeat": "{beat}"}}'
 
     def _restic(
         self, args: list[str], command: list[str], staged: Path, stdout_to: Path | None
@@ -192,6 +231,7 @@ class FakeHost:
                 id=f"{len(self.repository.snapshots) + 1:08x}" * 8,
                 time=f"2026-10-0{len(self.repository.snapshots) + 1}T03:17:02+00:00",
                 paths=[arg for arg in command if arg.startswith("/")],
+                tags=[command[i + 1] for i, arg in enumerate(command) if arg == "--tag"],
                 host=command[command.index("--host") + 1],
                 staged={path.name: path.read_bytes() for path in staged.iterdir()},
                 stored=dict(self.files),
@@ -273,6 +313,15 @@ def installed(tmp_path: Path, **settings: str) -> Path:
     (opt / ".env").write_text("".join(f"{key}={value}\n" for key, value in values.items()))
     (opt / ".installed").write_text("version=1.4.0\n")
     return opt
+
+
+def _compose_release(args: list[str], cwd: Path) -> str | None:
+    """The release of the Compose file a command uses: --file's, or the one in `cwd`."""
+    compose = cwd / (args[args.index("--file") + 1] if "--file" in args else "compose.yaml")
+    if not compose.exists():
+        return None
+    match = re.search(r"support-chatbot-backend:(\S+)", compose.read_text())
+    return match.group(1) if match else None
 
 
 @pytest.fixture

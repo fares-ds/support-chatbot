@@ -190,7 +190,7 @@ def test_a_backup_refuses_to_start_while_another_runs(
     assert sc.backup(CronFiresMidway(), install_dir=opt) == 0
 
     assert meanwhile == [1]
-    assert "Another backup or restore is running" in capsys.readouterr().err
+    assert "Another backup, restore or upgrade is running" in capsys.readouterr().err
     assert status(opt)["last_run"]["ok"] is True  # type: ignore[index]
 
 

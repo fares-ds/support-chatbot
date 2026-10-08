@@ -241,7 +241,7 @@ def test_no_backup_starts_while_a_restore_runs(
     )
 
     assert meanwhile == [1]
-    assert "Another backup or restore is running" in capsys.readouterr().err
+    assert "Another backup, restore or upgrade is running" in capsys.readouterr().err
 
 
 def test_after_a_restore_the_backup_directory_still_belongs_to_this_servers_account(

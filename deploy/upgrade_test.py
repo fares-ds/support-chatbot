@@ -380,6 +380,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--previous",
         help="the release to upgrade from, X.Y.Z or none (default: the newest one published)",
     )
+    parser.add_argument(
+        "--tested-from",
+        type=Path,
+        help="a file to write the release the test started from, empty for none, once it passes:"
+        " the release pipeline records it in the bundle, for sc upgrade (ADR-0034)",
+    )
     arguments = parser.parse_args(argv)
     try:
         run(["docker", "image", "inspect", f"{BACKEND}:{arguments.candidate}"])
@@ -410,6 +416,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"The upgrade test failed: {error}", file=sys.stderr)
             return 1
     _say("The upgrade test passed.")
+    if arguments.tested_from:
+        arguments.tested_from.write_text(previous or "", encoding="utf-8")
     return 0
 
 

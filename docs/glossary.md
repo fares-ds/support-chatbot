@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-08, with the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), and the upgrade test's smoke test and seeds.
+Updated 2026-10-08, with the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, and the upgrade path (ADR-0034).
 
 ## People and roles
 
@@ -37,6 +37,8 @@ Updated 2026-10-08, with the machine account (ADR-0031), the service account (AD
 | Backup | A restic snapshot of an install's database dump and stored files, sent encrypted to the install's backup repository off the server. `sc backup` takes one daily from the host's cron. It leaves out `.env`, whose copy the vendor keeps in a password manager ([ADR-0033](adr/0033-backups-leave-out-the-encryption-key.md)). |
 | Snapshot | One backup in the repository, named by its ID. `sc restore` brings an install's data back as of one, the latest by default. |
 | Smoke test | The check that a release runs on a database: its migration job, API and worker start, Postgres and Valkey answer, and the worker writes a fresh heartbeat that the API reads back. The upgrade test runs it for both releases; it grows with M1's endpoints. |
+| Pre-upgrade backup | The snapshot `sc upgrade` takes before changing anything, tagged `pre-upgrade`. A rollback restores it only if the previous release cannot run on the migrated database. |
+| Upgrade path | The installed versions a release upgrades from: the release its upgrade test started from, recorded in the bundle's `release.txt`, or a later one ([ADR-0034](adr/0034-upgrade-from-the-tested-release.md)). |
 | Upgrade seed | The rows the upgrade test puts in the previous release's database, one SQL file per migration revision that adds a table, in `backend/tests/upgrade_seeds/`. |
 | Stored files | Uploaded files and their parsed text, on the install's files volume (`/data/files`). Backed up with the database. |
 

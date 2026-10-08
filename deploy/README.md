@@ -7,7 +7,8 @@ What the vendor copies to a business's server to install or upgrade Support Chat
 | `compose.yaml` | The stack. Every image is pinned: ours to the release, the others to fixed tags. |
 | `Caddyfile` | HTTPS for the install's domain, and the API behind it |
 | `env.template` | The install's settings, which `sc install` writes to `.env` |
-| `sc` | The server CLI (ADR-0029): `install`, `backup` and `restore` now; `upgrade` and `status` follow |
+| `sc` | The server CLI (ADR-0029): `install`, `upgrade`, `backup` and `restore` now; `status` follows |
+| `release.txt` | The release's version, and the release it upgrades from (ADR-0034) |
 | `README.md` | This file |
 
 This directory also holds development files that stay out of the bundle:
@@ -31,7 +32,8 @@ The Release workflow (`.github/workflows/release.yml`) then:
 2. builds the backend image and the Caddy image for linux/amd64;
 3. scans both, and stops on a high or critical vulnerability that has a fix;
 4. pushes them to GitHub Container Registry as `ghcr.io/fares-ds/support-chatbot-backend:1.4.0` and `ghcr.io/fares-ds/support-chatbot-caddy:1.4.0`;
-5. builds the bundle with `python3 deploy/build_bundle.py 1.4.0 dist/`, and attaches it and its checksum to a GitHub release named after the tag.
+5. runs the upgrade test from the previous release on those images, below;
+6. builds the bundle with `python3 deploy/build_bundle.py 1.4.0 dist/ --upgrades-from 1.3.0`, recording the release the upgrade test started from, and attaches it and its checksum to a GitHub release named after the tag.
 
 `build_bundle.py` refuses to build when an image is not pinned, or when `compose.yaml` reads a setting that `env.template` does not list. Every pull request that touches the backend or `deploy/` runs the same build without publishing, and starts the bundle on the CI runner.
 
@@ -106,6 +108,31 @@ A setting from `env.template` can be changed with `--set`, such as `--set SC_EMB
 
 If a step fails, fix the cause and run `sc install` again: it keeps the secrets it wrote. Once an install has finished, `sc install` refuses to run again rather than replace its secrets.
 
+## Upgrading
+
+Copy the new release's bundle to the server as for an install, check it and unpack it, then run its `sc` with the version you mean:
+
+```sh
+sudo ./sc upgrade 1.5.0
+```
+
+A release upgrades only from the release CI tested it from, or a later one: its `release.txt` records which (ADR-0034). To cross several releases, upgrade through each in turn. Run upgrades at quiet hours: the API is down for the restart (OPS-5).
+
+Before changing anything, `sc upgrade` checks:
+- that the bundle is the version given;
+- that it can upgrade from the installed version;
+- that every service is healthy;
+- that 10 GB is free for the backup and the new images, a placeholder until #17 sets the minimum specs.
+
+Then it:
+1. backs up, as `sc backup` does, tagging the snapshot `pre-upgrade`, `from-<installed>` and `to-<target>`. If the backup fails, the upgrade stops;
+2. copies the new files to `next/` and pulls the new images. If that fails, the upgrade stops and the install is unchanged;
+3. keeps the current files in `previous/` (until the next upgrade), puts the new ones in place, and adds any new secrets to `.env`, keeping the others;
+4. stops the API and the worker, runs the new migration job once, starts the stack, and waits for every health check and a fresh worker heartbeat;
+5. records the new version in `.installed`.
+
+If any of step 3 or 4 fails, it rolls back. It puts the previous files and images back; their migration job leaves the newer schema alone, and expand-then-contract keeps them working on it (ADR-0013). If the previous release can't run on the migrated database either, it restores the pre-upgrade snapshot. Either way it exits 1 and names the snapshot. If the rollback fails too, it says so: fix the cause, then run `sudo /opt/support-chatbot/sc restore --snapshot <ID>`.
+
 ## Backups
 
 Every day at 03:17, server time, cron runs `sc backup` as the service account (OPS-6). One run makes one restic snapshot holding a dump of the database and the stored files (`/data/files`: uploads and their parsed text). restic encrypts the snapshot before it leaves the server, and runs in the bundle's pinned image, so the server needs nothing beyond Docker. Every snapshot is kept until open question 2 in the PRD sets a retention policy.
@@ -136,7 +163,7 @@ To list the snapshots, run `sudo docker compose run --rm restic snapshots` in `/
 - checks that `.env` holds the encryption key the snapshot was made with;
 - asks you to type `yes` (`--yes` skips the question).
 
-Then it fetches the database dump, stops the API and the worker, empties the job queue, restores the files (removing any added since the snapshot), replaces the database, runs the migration job, starts the stack, and checks `https://<domain>/api/health`. If a step fails, fix the cause and run it again: it starts over from the snapshot. A backup and a restore never run at once: the second refuses to start.
+Then it fetches the database dump, stops the API and the worker, empties the job queue, restores the files (removing any added since the snapshot), replaces the database, runs the migration job, starts the stack, and checks `https://<domain>/api/health`. If a step fails, fix the cause and run it again: it starts over from the snapshot. A backup, a restore and an upgrade never run at once: the second refuses to start.
 
 ### Onto a new server
 

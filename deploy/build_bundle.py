@@ -1,7 +1,9 @@
 """Builds the install bundle for one release (OPS-1, ADR-0027).
 
-`python3 deploy/build_bundle.py 1.4.0 dist/` writes dist/support-chatbot-1.4.0.tar.gz and its
-SHA-256 checksum. Standard library only, like the server CLI (ADR-0029).
+`python3 deploy/build_bundle.py 1.4.0 dist/ [--upgrades-from 1.3.0]` writes
+dist/support-chatbot-1.4.0.tar.gz and its SHA-256 checksum. --upgrades-from records the release
+the upgrade test started from, which sc upgrade accepts upgrading from (ADR-0034). Standard
+library only, like the server CLI (ADR-0029).
 """
 
 import gzip
@@ -73,12 +75,16 @@ def missing_from_template(compose: str, template: str) -> list[str]:
     return sorted(read - listed)
 
 
-def build(version: str, deploy: Path, out: Path) -> Path:
+def build(version: str, deploy: Path, out: Path, *, upgrades_from: str = "") -> Path:
     """Writes out/support-chatbot-<version>.tar.gz and its .sha256, and returns the archive.
-    Refuses a version that is not X.Y.Z, an unpinned image, and a setting the environment
-    template does not list."""
+    Refuses a version that is not X.Y.Z, an unpinned image, a setting the environment template
+    does not list, and a release to upgrade from that is not older."""
     if not _RELEASE.match(version):
         raise ValueError(f"{version!r} is not a release version: use X.Y.Z, such as 1.4.0")
+    if upgrades_from and not (
+        _RELEASE.match(upgrades_from) and _numbers(upgrades_from) < _numbers(version)
+    ):
+        raise ValueError(f"{upgrades_from!r} is not a release older than {version}")
     compose = pin((deploy / "compose.yaml").read_text(encoding="utf-8"), version)
     problems = unpinned_images(compose, version)
     template = (deploy / "env.template").read_text(encoding="utf-8")
@@ -94,12 +100,17 @@ def build(version: str, deploy: Path, out: Path) -> Path:
         file: compose.encode() if file == "compose.yaml" else (deploy / file).read_bytes()
         for file in BUNDLED
     }
+    files["release.txt"] = f"version={version}\nupgrades_from={upgrades_from}\n".encode()
     out.mkdir(parents=True, exist_ok=True)
     archive = out / f"{name}.tar.gz"
     archive.write_bytes(_tarball(name, files))
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_name(archive.name + ".sha256").write_text(f"{digest}  {archive.name}\n")
     return archive
+
+
+def _numbers(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
 
 
 def _tarball(directory: str, files: dict[str, bytes]) -> bytes:
@@ -128,11 +139,25 @@ def _entry(name: str, kind: bytes, mode: int) -> tarfile.TarInfo:
 
 
 def main(arguments: list[str]) -> int:
-    if len(arguments) != 2:
-        print("usage: build_bundle.py VERSION OUT_DIR", file=sys.stderr)
-        return 2
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="build_bundle.py", description=__doc__.split("\n\n")[0])
+    parser.add_argument("version", help="the release, X.Y.Z")
+    parser.add_argument("out_dir", type=Path, help="where to write the archive and its checksum")
+    parser.add_argument(
+        "--upgrades-from",
+        default="",
+        metavar="X.Y.Z",
+        help="the release the upgrade test started from; empty for a first release",
+    )
+    parsed = parser.parse_args(arguments)
     try:
-        archive = build(arguments[0], Path(__file__).resolve().parent, Path(arguments[1]))
+        archive = build(
+            parsed.version,
+            Path(__file__).resolve().parent,
+            parsed.out_dir,
+            upgrades_from=parsed.upgrades_from,
+        )
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
