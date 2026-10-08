@@ -13,8 +13,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
 FROM python:3.12.15-slim-trixie
+# /data/files holds uploads and parsed text on the files volume, which takes this owner when
+# Docker first fills it.
 RUN groupadd --system --gid 10001 app \
-    && useradd --system --uid 10001 --gid app --no-create-home app
+    && useradd --system --uid 10001 --gid app --no-create-home app \
+    && mkdir --parents /data/files && chown app:app /data/files
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY app ./app

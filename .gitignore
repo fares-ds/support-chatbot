@@ -25,6 +25,8 @@ bench/results/
 .env.*
 !.env.example
 *.pem
+# A database dump the development stack's restic service would stage
+deploy/backup/
 
 # Editors and OS
 .DS_Store

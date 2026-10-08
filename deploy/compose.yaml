@@ -50,6 +50,9 @@ services:
       # Encrypts the identity secret and provider API keys in Postgres (SEC-6), from M1.
       SC_ENCRYPTION_KEY: ${SC_ENCRYPTION_KEY:?SC_ENCRYPTION_KEY is not set}
       SC_OLLAMA_URL: ${SC_OLLAMA_URL:-http://ollama:11434}
+    volumes:
+      # Uploaded files and their parsed text (KB-5), from M2; sc backup archives them.
+      - files:/data/files
     networks: [edge, backend]
     # Not on the model services: live chat works without them, because the AI hands off.
     depends_on:
@@ -87,6 +90,8 @@ services:
       SC_ENCRYPTION_KEY: ${SC_ENCRYPTION_KEY:?SC_ENCRYPTION_KEY is not set}
       # Above the longest job (OPS-11); a placeholder until the M0 benchmark measures it.
       SC_CELERY_VISIBILITY_TIMEOUT: ${SC_CELERY_VISIBILITY_TIMEOUT:-3600}
+    volumes:
+      - files:/data/files
     networks: [backend]
     depends_on:
       migrate:
@@ -220,6 +225,24 @@ services:
       start_interval: 2s
     logging: *logging
 
+  # restic (OPS-6), which sc backup and sc restore run on their own; the tools profile keeps it
+  # out of `up`. sc stages the database dump in ./backup, and mounts a repository on a local
+  # path. .env's encryption key never reaches it (ADR-0033).
+  restic:
+    image: restic/restic:0.19.1
+    profiles: [tools]
+    environment:
+      RESTIC_REPOSITORY: ${SC_RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${SC_RESTIC_PASSWORD:-}
+      # For an S3-compatible repository.
+      AWS_ACCESS_KEY_ID: ${SC_RESTIC_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${SC_RESTIC_AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - ./backup:/backup/database
+      - files:/data/files
+      - restic_cache:/root/.cache/restic
+    logging: *logging
+
 networks:
   edge:
   backend:
@@ -229,6 +252,8 @@ volumes:
   caddy_config:
   postgres_data:
   valkey_data:
+  files:
+  restic_cache:
   tei_embed_models:
   tei_rerank_models:
   ollama_models:

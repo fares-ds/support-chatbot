@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-08, with the machine account (ADR-0031) and the service account (ADR-0032).
+Updated 2026-10-08, with the machine account (ADR-0031), the service account (ADR-0032), and backups and snapshots (ADR-0033).
 
 ## People and roles
 
@@ -34,6 +34,9 @@ Updated 2026-10-08, with the machine account (ADR-0031) and the service account 
 | Install bundle | What the vendor installs and upgrades from: the Compose file, the environment template and the server CLI, published with each release (OPS-1). |
 | Service account | `supportchatbot`, the system user an install runs as. It owns `/opt/support-chatbot` and alone can read the install's secrets ([ADR-0032](adr/0032-dedicated-service-account.md)). |
 | Machine account | The vendor's second GitHub account. It holds each install's read-only pull token, and can read only our two packages ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md)). |
+| Backup | A restic snapshot of an install's database dump and stored files, sent encrypted to the install's backup repository off the server. `sc backup` takes one daily from the host's cron. It leaves out `.env`, whose copy the vendor keeps in a password manager ([ADR-0033](adr/0033-backups-leave-out-the-encryption-key.md)). |
+| Snapshot | One backup in the repository, named by its ID. `sc restore` brings an install's data back as of one, the latest by default. |
+| Stored files | Uploaded files and their parsed text, on the install's files volume (`/data/files`). Backed up with the database. |
 
 ## Conversations
 

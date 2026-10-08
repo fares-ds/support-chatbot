@@ -63,10 +63,12 @@ jobs:
           (umask 077 && printf '%s' "$GH_TOKEN" > "$RUNNER_TEMP/token")
           # Our images are the ones just built, so only the others are pulled. The small
           # multilingual models development uses stand in for the defaults' gigabytes.
+          # The backup repository is a local path, standing in for off-server storage.
           sudo "$RUNNER_TEMP/release/support-chatbot-$VERSION/sc" install \
             --domain localhost --registry-user "$GITHUB_ACTOR" --token-file "$RUNNER_TEMP/token" \
             --set SC_EMBEDDING_MODEL=intfloat/multilingual-e5-small \
-            --set SC_RERANK_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+            --set SC_RERANK_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 \
+            --set SC_RESTIC_REPOSITORY=/var/backups/support-chatbot
           rm "$RUNNER_TEMP/token"
       - name: Eight containers healthy, and the pages over HTTPS
         working-directory: /opt/support-chatbot
@@ -89,6 +91,59 @@ jobs:
             --registry-user nobody --token-file /dev/null; then
             echo "sc install ran over an install"; exit 1
           fi
+      - name: The cron entry backs up a marker row and a marker file
+        working-directory: /opt/support-chatbot
+        run: |
+          sudo docker compose exec -T postgres psql --username=sc --dbname=support_chatbot \
+            --command "CREATE TABLE ci_marker (note text); INSERT INTO ci_marker VALUES ('before the backup')"
+          # As the API's own user, so the files volume must be writable by it.
+          sudo docker compose exec -T api sh -c 'mkdir -p /data/files/kb && echo marker > /data/files/kb/marker.txt'
+          # The command cron runs, run the way cron runs it: as the service account, from a login.
+          entry=$(grep -E '^[0-9]' /etc/cron.d/support-chatbot)
+          echo "$entry"
+          test "$(echo "$entry" | awk '{print $6}')" = supportchatbot
+          sudo runuser --login supportchatbot --shell /bin/sh --command "$(echo "$entry" | cut -d' ' -f7-)"
+          sudo cat backup.log
+          sudo cat backup-status.json | tee "$RUNNER_TEMP/status.json"
+          jq --exit-status '.last_run.ok and .last_success == .last_run.at' "$RUNNER_TEMP/status.json"
+      - name: sc restore onto a fresh install brings both back
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The vendor's password manager holds the old .env (ADR-0033). Then the server is lost.
+          sudo cp /opt/support-chatbot/.env "$RUNNER_TEMP/old.env"
+          (cd /opt/support-chatbot && sudo docker compose down)
+          for volume in postgres_data valkey_data files restic_cache; do
+            sudo docker volume rm "support-chatbot_$volume"
+          done
+          sudo rm -rf /opt/support-chatbot /etc/cron.d/support-chatbot
+          (umask 077 && printf '%s' "$GH_TOKEN" > "$RUNNER_TEMP/token")
+          sudo "$RUNNER_TEMP/release/support-chatbot-$VERSION/sc" install \
+            --domain localhost --registry-user "$GITHUB_ACTOR" --token-file "$RUNNER_TEMP/token" \
+            --set SC_EMBEDDING_MODEL=intfloat/multilingual-e5-small \
+            --set SC_RERANK_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 \
+            --set SC_RESTIC_REPOSITORY=/var/backups/support-chatbot
+          rm "$RUNNER_TEMP/token"
+          copy_from_old_env() {
+            line=$(sudo grep "^$1=" "$RUNNER_TEMP/old.env")
+            sudo sed -i "s|^$1=.*|$line|" /opt/support-chatbot/.env
+          }
+          # With the repository's password but not the old key, restore refuses and changes nothing.
+          copy_from_old_env SC_RESTIC_PASSWORD
+          if sudo /opt/support-chatbot/sc restore --yes 2> "$RUNNER_TEMP/refused.txt"; then
+            echo "sc restore ran with another key"; exit 1
+          fi
+          cat "$RUNNER_TEMP/refused.txt"
+          grep 'different SC_ENCRYPTION_KEY' "$RUNNER_TEMP/refused.txt"
+          copy_from_old_env SC_ENCRYPTION_KEY
+          sudo /opt/support-chatbot/sc restore --yes
+          cd /opt/support-chatbot
+          test "$(sudo docker compose exec -T postgres psql --username=sc --dbname=support_chatbot \
+            --tuples-only --no-align --command 'SELECT note FROM ci_marker')" = 'before the backup'
+          test "$(sudo docker compose exec -T api cat /data/files/kb/marker.txt)" = marker
+          test "$(sudo docker compose ps --format '{{.Health}}' | grep -c '^healthy$')" = 8
+          curl --fail --silent --show-error --cacert caddy-root.crt https://localhost/api/health \
+            | jq --exit-status '.status == "ok"'
       - name: Logs
         if: failure()
         working-directory: /opt/support-chatbot
