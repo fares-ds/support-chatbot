@@ -25,7 +25,7 @@ def main() -> None:
     config.set_main_option("script_location", str(MIGRATIONS))
     logger.info("migrating the database to the newest revision")
     command.upgrade(config, "head")
-    logger.info("the database is at the newest revision")
+    logger.info("the migration job finished")
 
 
 if __name__ == "__main__":

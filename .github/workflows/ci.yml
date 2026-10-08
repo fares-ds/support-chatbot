@@ -113,6 +113,20 @@ jobs:
           schema > "$RUNNER_TEMP/schema-after.sql"
           diff "$RUNNER_TEMP/schema-before.sql" "$RUNNER_TEMP/schema-after.sql"
           grep -q 'CREATE EXTENSION IF NOT EXISTS vector' "$RUNNER_TEMP/schema-after.sql"
+      - name: A rolled-back release leaves a newer schema alone
+        run: |
+          # A rollback runs the previous release's migration job on a schema a newer release
+          # migrated. It must leave it as it is and succeed, or the API never starts (ADR-0013).
+          revision() {
+            docker compose exec -T postgres psql --username=sc --dbname=support_chatbot \
+              --tuples-only --no-align --command "$1"
+          }
+          head=$(revision 'SELECT version_num FROM alembic_version')
+          revision "UPDATE alembic_version SET version_num = '9999'"
+          docker compose run --rm migrate 2>&1 | tee "$RUNNER_TEMP/rollback.log"
+          grep -q 'revision this release does not know' "$RUNNER_TEMP/rollback.log"
+          test "$(revision 'SELECT version_num FROM alembic_version')" = 9999
+          revision "UPDATE alembic_version SET version_num = '$head'"
       - name: Only Caddy publishes ports
         run: |
           published=$(docker compose ps --format '{{.Service}} {{.Ports}}' | grep -- '->' | cut -d ' ' -f 1 | sort -u)
