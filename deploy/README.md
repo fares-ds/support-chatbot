@@ -101,7 +101,7 @@ Every day at 03:17, server time, cron runs `sc backup` as the service account (O
 
 The repository is a restic repository off the server: S3-compatible storage (`s3:`, for Backblaze B2, Hetzner, Cloudflare R2, Wasabi or AWS), a restic REST server (`rest:`), or an absolute path, such as a mounted disk. `sc` refuses anything else, such as a relative path, which restic would write inside its throwaway container.
 
-1. Give `sc install` the repository with `--set SC_RESTIC_REPOSITORY=s3:https://<endpoint>/<bucket>/<install>`, or add it to `.env` later.
+1. Give `sc install` the repository with `--set SC_RESTIC_REPOSITORY=s3:https://<endpoint>/<bucket>/<install>`, or add it to `.env` later. A REST server's URL carries its password, so it goes in `.env` only.
 2. For S3, add the keys with `sudoedit /opt/support-chatbot/.env`: `SC_RESTIC_AWS_ACCESS_KEY_ID` and `SC_RESTIC_AWS_SECRET_ACCESS_KEY`. `sc install` refuses the secret key in `--set`, because shell history would keep it.
 3. Run the first backup by hand: `sudo /opt/support-chatbot/sc backup`. It creates the repository, which takes the password `sc install` generated.
 4. Copy the finished `.env` into your password manager.

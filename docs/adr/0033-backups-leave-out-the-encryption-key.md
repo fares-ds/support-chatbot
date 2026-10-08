@@ -27,6 +27,7 @@ GitLab's backups handle the same problem the same way. Its backup task leaves ou
 - Losing the password-manager entry loses the backups, since the restic password is in it. If only the key were lost, the Owner could re-enter the provider keys and the identity secret could be rotated.
 - A restore needs one manual step: pasting the old settings. The fingerprint check turns a forgotten paste into a plain refusal, instead of an install whose secrets can't be decrypted.
 - Backups and restores run the bundle's pinned restic image, so the server still needs only Docker ([ADR-0029](0029-server-cli-in-standard-library-python.md)).
+- Every backup carries `sha256(SC_ENCRYPTION_KEY)`. M1's encryption must therefore never use that value as its working key, or every backup would carry the key. Derive working keys some other way, such as HKDF with a purpose label.
 
 ## Open
 

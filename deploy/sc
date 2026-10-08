@@ -281,7 +281,8 @@ def parse_settings(given: Sequence[str]) -> dict[str, str]:
             raise ValueError(f"--set {key}: a value is one line")
         if key in GENERATED or key == "SC_DOMAIN":
             raise ValueError(f"--set {key}: sc generates it, or takes it from --domain")
-        if key in TYPED_SECRETS:
+        if key in TYPED_SECRETS or (key == "SC_RESTIC_REPOSITORY" and "@" in value):
+            # A REST server's URL carries its password: rest:https://user:password@host/...
             raise ValueError(f"--set {key}: shell history would keep it; edit .env instead")
         if key in ("SC_HTTP_PORT", "SC_HTTPS_PORT") and not (
             value.isdigit() and 1 <= int(value) <= 65535

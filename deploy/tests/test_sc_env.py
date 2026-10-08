@@ -84,6 +84,7 @@ def test_a_rerun_keeps_the_secrets_and_takes_the_corrected_domain_and_settings(
         (["SC_ENCRYPTION_KEY=abc"], "generates"),
         (["SC_RESTIC_PASSWORD=abc"], "generates"),
         (["SC_RESTIC_AWS_SECRET_ACCESS_KEY=abc"], "edit .env"),
+        (["SC_RESTIC_REPOSITORY=rest:https://acme:hunter2@backup.example.com/acme"], "edit .env"),
         (["PATH=/tmp"], "SC_"),
         (["SC_EMBEDDING_MODEL"], "KEY=VALUE"),
         (["SC_HTTP_PORT=eighty"], "port"),
