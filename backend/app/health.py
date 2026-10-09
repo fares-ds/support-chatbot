@@ -72,6 +72,8 @@ class FullHealthReport(HealthReport):
     schema while an upgrade or a rollback is under way (ADR-0013)."""
     worker_heartbeat: datetime | None
     """When the worker last beat; the worker check turns down when it is stale."""
+    release: str | None = None
+    """Demo for PR #35's drift check, reverted before merging."""
 
 
 def postgres_check(engine: AsyncEngine) -> Check:
