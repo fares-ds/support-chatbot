@@ -1,0 +1,13 @@
+{
+  "name": "support-chatbot-frontend",
+  "private": true,
+  "description": "The dashboard, the widget and their generated API client (ADR-0027). M1 adds dashboard/, widget/ and widget-loader/.",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "generate": "pnpm --filter @support-chatbot/api-client generate",
+    "typecheck": "pnpm --recursive typecheck"
+  }
+}

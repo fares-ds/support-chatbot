@@ -1,0 +1,30 @@
+{
+  "title": "ServerEvent",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ConnectionReady"
+    }
+  ],
+  "$defs": {
+    "ConnectionReady": {
+      "description": "Sent once a WebSocket connects. A client that reconnected then fetches the messages after\nthe last sequence it holds, and takes live events from here on (RT-5).",
+      "properties": {
+        "type": {
+          "const": "connection.ready",
+          "default": "connection.ready",
+          "type": "string"
+        },
+        "connected_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "connected_at"
+      ],
+      "title": "ConnectionReady",
+      "type": "object"
+    }
+  }
+}

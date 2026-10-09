@@ -61,6 +61,47 @@ jobs:
       - name: Migration rules
         run: uv run python -m tools.migration_rules migrations/versions
 
+  contract:
+    # ADR-0026: the frontend's API client and event types are generated from the backend, and
+    # committed. A backend change that alters them must commit the regenerated code with it.
+    name: API client and event types
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          working-directory: backend
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json # its packageManager field pins pnpm
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Regenerate from the backend
+        run: pnpm generate
+      - name: The committed client matches the backend
+        run: |
+          if [ -n "$(git status --porcelain -- .)" ]; then
+            git status --short -- .
+            git diff -- .
+            echo "The API client or the event types differ from the backend: run pnpm --dir frontend generate, and commit the result."
+            exit 1
+          fi
+      - name: Types
+        run: pnpm typecheck
+
   stack:
     name: Compose stack
     runs-on: ubuntu-24.04

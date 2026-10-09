@@ -1,0 +1,8 @@
+packages:
+  - api-client
+
+# js-yaml before 4.3.2 has denial-of-service flaws (CVE-2026-59869, CVE-2026-84375); a code
+# generator's dependency pulls 4.2.0. Only 4.x is lifted: 3.x has a different API. Drop this once
+# the generator asks for a fixed version itself.
+overrides:
+  js-yaml@>=4 <4.3.2: ^4.3.2

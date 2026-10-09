@@ -57,6 +57,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json" if development else None,
         docs_url="/api/docs" if development else None,
         redoc_url=None,
+        # Each operation is named after its route function, which the generated client's
+        # functions and query options are named after in turn (ADR-0026): health, healthOptions.
+        generate_unique_id_function=lambda route: route.name,
     )
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health.router, prefix="/api")

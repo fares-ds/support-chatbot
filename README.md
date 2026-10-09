@@ -13,7 +13,7 @@ Proprietary, not open source ([ADR-0010](docs/adr/0010-proprietary-closed-source
 | [docs/tech-stack.md](docs/tech-stack.md) | The stack and its configuration rules |
 | [docs/glossary.md](docs/glossary.md) | The words to use in code and screens |
 | `backend/` | The FastAPI API, the Celery worker with Beat, and the Alembic migrations |
-| `frontend/` | Not started. The generated API client comes in M0; the dashboard, widget and widget loader in M1. |
+| [frontend/](frontend/) | A pnpm workspace. `api-client/` is the API's TypeScript client and the WebSocket event types, generated from the backend (ADR-0026); the dashboard, widget and widget loader join it in M1. |
 | [deploy/](deploy/) | The install bundle: the Compose file, Caddyfile, environment template and `sc`, the server CLI, built into a release by `build_bundle.py`. Also the Caddy image and the development Compose files. |
 | `compose.yaml` | The development stack: the install bundle's Compose file, with the backend and Caddy images built from source |
 | [bench/](bench/) | The M0 benchmark harness |
@@ -32,6 +32,8 @@ You need Docker and [uv](https://docs.astral.sh/uv/).
   - `downgrade()` stays empty; a rollback restores the pre-upgrade backup.
   - CI checks these rules: `uv run python -m tools.migration_rules migrations/versions`.
   - A migration that adds a table also adds its rows, in `backend/tests/upgrade_seeds/<revision>.sql`. CI's upgrade test (`deploy/upgrade_test.py`) seeds the previous release's database, upgrades it with the pull request's migrations, and checks that both releases still run on it; it fails if a table has no seed rows.
+- In `frontend/`, with Node 24 and pnpm (the version in `frontend/package.json`'s `packageManager`; `corepack enable`, or `npx pnpm@<version>`): `pnpm install`, then `pnpm typecheck`.
+- **The API client is generated, and committed.** After changing a route, a response model or a WebSocket event (`backend/app/events.py`), run `pnpm --dir frontend generate` and commit what changes: CI regenerates it and fails on any difference. It exports the OpenAPI spec and the events' JSON Schema from the backend, without a server, then runs Hey API's openapi-ts and json-schema-to-typescript. Operations are named after their route functions, so `def health()` becomes `health()` and `healthOptions()` in TypeScript.
 - In `deploy/`: `uv run --no-project --python 3.10 --with pytest pytest` tests `sc`, the bundle builder and the upgrade test's helpers on the oldest Python `sc` supports; `uvx ruff check .` lints them.
 - The M0 benchmark times the AI pipeline against the running stack: see [bench/README.md](bench/README.md).
 
