@@ -21,6 +21,7 @@ async def test_healthy_when_every_check_passes(app: FastAPI, client: httpx.Async
         "checks": {"postgres": "ok", "valkey": "ok"},
         "schema_revision": None,
         "worker_heartbeat": None,
+        "release": None,
     }
 
 
@@ -35,6 +36,7 @@ async def test_unhealthy_when_a_check_fails(app: FastAPI, client: httpx.AsyncCli
         "checks": {"postgres": "ok", "valkey": "down"},
         "schema_revision": None,
         "worker_heartbeat": None,
+        "release": None,
     }
 
 
@@ -54,6 +56,7 @@ async def test_readiness_ignores_everything_but_what_serving_needs(
         "checks": {"postgres": "ok", "ollama": "down"},
         "schema_revision": None,
         "worker_heartbeat": None,
+        "release": None,
     }
 
 
@@ -143,6 +146,7 @@ async def test_a_revision_that_cannot_be_read_is_null_and_leaves_health_alone(
         "checks": {"postgres": "ok"},
         "schema_revision": None,
         "worker_heartbeat": None,
+        "release": None,
     }
 
 
