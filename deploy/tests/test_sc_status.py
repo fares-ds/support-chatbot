@@ -337,3 +337,29 @@ def test_a_malformed_token_never_reaches_the_output(tmp_path: Path) -> None:
         sc.Host().registry_token_expiry(config)
 
     assert secret not in str(raised.value) and secret not in repr(raised.value)
+
+
+@pytest.mark.parametrize("token", ["ghp_" + "a" * 36, "ghs_abc.def-ghi_jkl", "github_pat_11AB_x9"])
+def test_any_printable_token_reaches_github(
+    token: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import io
+    import urllib.error
+
+    config = tmp_path / "config.json"
+    auth = base64.b64encode(f"u:{token}".encode()).decode()
+    config.write_text(json.dumps({"auths": {"ghcr.io": {"auth": auth}}}))
+    sent = []
+
+    def github(request: object, **kwargs: object) -> object:
+        sent.append(request)
+        raise urllib.error.HTTPError(
+            "https://api.github.com/user", 401, "Bad credentials", {}, io.BytesIO(b"")
+        )  # type: ignore[arg-type]
+
+    monkeypatch.setattr(sc.urllib.request, "urlopen", github)
+
+    with pytest.raises(PermissionError):
+        sc.Host().registry_token_expiry(config)
+    assert len(sent) == 1
