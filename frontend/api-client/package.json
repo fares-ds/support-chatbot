@@ -1,0 +1,27 @@
+{
+  "name": "@support-chatbot/api-client",
+  "private": true,
+  "description": "The API's TypeScript client and WebSocket event types, generated from the backend (ADR-0026). Never edit src/generated/ by hand: run pnpm generate.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "pnpm run generate:contract && pnpm run generate:client && pnpm run generate:events",
+    "generate:contract": "cd ../../backend && uv run python -m tools.export_contract ../frontend/api-client",
+    "generate:client": "openapi-ts",
+    "generate:events": "json2ts --input events.schema.json --output src/events.gen.ts --additionalProperties false --unreachableDefinitions",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.104.1"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "@tanstack/react-query": "5.104.1",
+    "@types/react": "19.3.0",
+    "json-schema-to-typescript": "16.0.0",
+    "react": "19.3.0",
+    "typescript": "6.0.3"
+  }
+}
