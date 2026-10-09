@@ -7,7 +7,7 @@ What the vendor copies to a business's server to install or upgrade Support Chat
 | `compose.yaml` | The stack. Every image is pinned: ours to the release, the others to fixed tags. |
 | `Caddyfile` | HTTPS for the install's domain, and the API behind it |
 | `env.template` | The install's settings, which `sc install` writes to `.env` |
-| `sc` | The server CLI (ADR-0029): `install`, `upgrade`, `backup` and `restore` now; `status` follows |
+| `sc` | The server CLI (ADR-0029): `install`, `upgrade`, `status`, `backup` and `restore` |
 | `release.txt` | The release's version, and the release it upgrades from (ADR-0034) |
 | `README.md` | This file |
 
@@ -70,7 +70,7 @@ Give the machine account nothing else: no access to the repository, and no other
 1. Signed in as the machine account, open **Settings**, **Developer settings**, **Personal access tokens**, **Tokens (classic)**, then **Generate new token (classic)**.
 2. Name it after the install, such as `install-oneclickdz`, set an expiry, and tick only **read:packages**.
 3. Give it to `sc install`, which logs in as the service account (below). Docker keeps the login in `/opt/support-chatbot/.docker/config.json`, readable only by that account.
-4. Note the expiry date. Before it, generate a new token, log in again as the service account (`sudo runuser --login supportchatbot --shell /bin/sh --command 'docker login ghcr.io --username fares-ds-installs --password-stdin'`), and delete the old one.
+4. Before it expires, generate a new token (`sc status` warns 14 days ahead), log in again as the service account (`sudo runuser --login supportchatbot --shell /bin/sh --command 'docker login ghcr.io --username fares-ds-installs --password-stdin'`), and delete the old one.
 
 To cut an install off, delete its token under the machine account's tokens. The other installs keep working.
 
@@ -107,6 +107,33 @@ Then it:
 A setting from `env.template` can be changed with `--set`, such as `--set SC_EMBEDDING_MODEL=…`. Secrets can't be passed that way, since shell history and `ps` would keep them.
 
 If a step fails, fix the cause and run `sc install` again: it keeps the secrets it wrote. Once an install has finished, `sc install` refuses to run again rather than replace its secrets.
+
+## Checking an install
+
+`sudo /opt/support-chatbot/sc status` prints one line per part of the install, each ok, warning or problem, with names, counts and times only (OPS-7, SEC-10):
+
+```
+Support Chatbot 1.5.0 at https://chat.example.com (installed 2026-09-01; upgraded from 1.4.0 on 2026-10-09)
+Services        ok       8 running and healthy; migrations done
+Models          ok       tei_embed, tei_rerank and ollama answer
+Health          ok       postgres, valkey and worker answer; schema 0002; the worker beat 12 s ago
+Disk            ok       /opt/support-chatbot 41 GB free; /var/lib/docker 41 GB free
+Queue           ok       0 jobs waiting
+Last backup     ok       2026-10-09 03:17 (6 h ago), snapshot 3f2a9c1e
+Registry token  warning  expires 2026-10-20, in 11 days: generate a new one
+Status: 1 warning
+```
+
+It exits 0 when every line is ok, 1 when the worst is a warning, and 2 when something is a problem: the monitoring plugins' convention, so a monitor or a cron job can alert on it.
+
+| Line | A problem | A warning |
+| --- | --- | --- |
+| Services | a container stopped or unhealthy, or the migration job failed | |
+| Models, Health | `/api/health` says a check is down, or does not answer | |
+| Disk | under 10 GB free, the minimum `sc upgrade` needs | |
+| Queue | Valkey does not answer | |
+| Last backup | no success in 26 hours, or ever | the latest run failed, but a success is recent |
+| Registry token | expired, or refused by GitHub | it expires within 14 days, or GitHub cannot be asked (ADR-0031) |
 
 ## Upgrading
 
@@ -150,7 +177,7 @@ The repository is a restic repository off the server: S3-compatible storage (`s3
 
 ### Checking backups
 
-- `/opt/support-chatbot/backup-status.json` records the last run (its time, result, message and snapshot) and the time of the last success. `sc status` will report it.
+- `/opt/support-chatbot/backup-status.json` records the last run (its time, result, message and snapshot) and the time of the last success. `sc status` reports it.
 - `backup.log`, next to it, holds the last run's output.
 - A failed run exits non-zero with a plain message naming the step that failed: dumping the database, or saving the snapshot to the repository.
 

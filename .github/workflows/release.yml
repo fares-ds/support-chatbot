@@ -210,6 +210,28 @@ jobs:
           # Both upgrades left their pre-upgrade backup.
           sudo docker compose run --rm -T --volume /var/backups/support-chatbot:/var/backups/support-chatbot \
             restic snapshots --json --tag pre-upgrade | jq --exit-status 'length == 2'
+      - name: sc status reports the install, and a stopped worker
+        working-directory: /opt/support-chatbot
+        run: |
+          report() {
+            set +e
+            sudo /opt/support-chatbot/sc status > "$RUNNER_TEMP/status.txt"
+            echo $? > "$RUNNER_TEMP/status-code.txt"
+            set -e
+            cat "$RUNNER_TEMP/status.txt"
+          }
+          report
+          # Everything is ok except the registry token: the runner logged in with the workflow's
+          # token, which GitHub does not date like a personal one. A warning exits 1.
+          test "$(cat "$RUNNER_TEMP/status-code.txt")" = 1
+          for label in Services Models Health Disk Queue 'Last backup'; do
+            grep -E "^$label +ok " "$RUNNER_TEMP/status.txt"
+          done
+          grep -E '^Registry token +warning ' "$RUNNER_TEMP/status.txt"
+          sudo docker compose stop worker
+          report
+          test "$(cat "$RUNNER_TEMP/status-code.txt")" = 2
+          grep -E '^Services +problem .*worker \(exited\)' "$RUNNER_TEMP/status.txt"
       - name: Logs
         if: failure()
         run: |

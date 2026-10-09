@@ -32,4 +32,8 @@ A token from that account, leaked from one server, could read every package the 
 
 ## Open
 
-- How far ahead of expiry `sc status` warns.
+- ~~How far ahead of expiry `sc status` warns.~~ Settled below.
+
+## Update, 2026-10-09 (#11)
+
+`sc status` warns 14 days before the install's token expires, and reports a problem once it has expired or GitHub refuses it. It reads the token from the service account's Docker login and asks GitHub, whose API answers a classic token's requests with its expiry in the `GitHub-Authentication-Token-Expiration` header. No date is typed or stored, so a rotated token is read afresh. A token without an expiry is reported as one.
