@@ -106,17 +106,6 @@
               }
             ],
             "title": "Worker Heartbeat"
-          },
-          "release": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Release"
           }
         },
         "type": "object",

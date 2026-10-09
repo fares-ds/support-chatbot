@@ -28,10 +28,6 @@ export type FullHealthReport = {
      * Worker Heartbeat
      */
     worker_heartbeat: string | null;
-    /**
-     * Release
-     */
-    release?: string | null;
 };
 
 /**
