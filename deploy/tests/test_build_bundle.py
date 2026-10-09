@@ -100,6 +100,7 @@ class BuildTest(unittest.TestCase):
                 "support-chatbot-1.4.0/README.md",
                 "support-chatbot-1.4.0/compose.yaml",
                 "support-chatbot-1.4.0/env.template",
+                "support-chatbot-1.4.0/release.txt",
                 "support-chatbot-1.4.0/sc",
             ],
         )
@@ -107,6 +108,26 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(modes["sc"], 0o755)  # so the vendor runs ./sc
         self.assertEqual(modes["compose.yaml"], 0o644)
         self.assertEqual(checksum, f"{digest}  support-chatbot-1.4.0.tar.gz\n")
+
+    def test_a_bundle_records_the_release_its_upgrade_test_started_from(self) -> None:
+        with TemporaryDirectory() as tmp:
+            deploy = deploy_directory(Path(tmp))
+            archive = build("1.5.0", deploy, Path(tmp) / "dist", upgrades_from="1.4.0")
+            first = build("1.0.0", deploy, Path(tmp) / "first")
+
+            def release(path: Path, version: str) -> str:
+                with tarfile.open(path) as tar:
+                    return tar.extractfile(f"support-chatbot-{version}/release.txt").read().decode()
+
+            self.assertEqual(release(archive, "1.5.0"), "version=1.5.0\nupgrades_from=1.4.0\n")
+            self.assertEqual(release(first, "1.0.0"), "version=1.0.0\nupgrades_from=\n")
+
+    def test_a_release_upgrades_only_from_an_older_one(self) -> None:
+        with TemporaryDirectory() as tmp:
+            deploy = deploy_directory(Path(tmp))
+            for upgrades_from in ["1.5.0", "1.6.0", "v1.4.0", "latest"]:
+                with self.subTest(upgrades_from=upgrades_from), self.assertRaises(ValueError):
+                    build("1.5.0", deploy, Path(tmp) / "dist", upgrades_from=upgrades_from)
 
     def test_a_version_reads_major_minor_patch(self) -> None:
         with TemporaryDirectory() as tmp:

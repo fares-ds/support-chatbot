@@ -157,6 +157,59 @@ jobs:
           sudo cat caddy-root.crt > "$RUNNER_TEMP/root.crt"  # the service account's file
           curl --fail --silent --show-error --cacert "$RUNNER_TEMP/root.crt" \
             https://localhost/api/health | jq --exit-status '.status == "ok"'
+      - name: sc upgrade to a new release, and back from a failed one
+        run: |
+          # Two releases made from the candidate: 0.0.1 adds a table; 0.0.2's migration fails.
+          head=$(ls backend/migrations/versions | grep -E '^[0-9]+_' | sort | tail -n 1 | cut -d _ -f 1)
+          release() {
+            local version=$1 upgrades_from=$2 down=$head revision=9000
+            cp -r backend "$RUNNER_TEMP/backend-$version"
+            shift 2
+            for body in "$@"; do
+              revision=$((revision + 1))
+              printf '"""CI: %s"""\nimport sqlalchemy as sa\nfrom alembic import op\n\nrevision = "%s"\ndown_revision = "%s"\n\n\ndef upgrade() -> None:\n    %s\n' \
+                "$version" "$revision" "$down" "$body" > "$RUNNER_TEMP/backend-$version/migrations/versions/${revision}_ci.py"
+              down=$revision
+            done
+            docker build --quiet --platform linux/amd64 --tag "$BACKEND:$version" "$RUNNER_TEMP/backend-$version"
+            docker tag "$CADDY:$VERSION" "$CADDY:$version"
+            python3 deploy/build_bundle.py "$version" "$RUNNER_TEMP/dist" --upgrades-from "$upgrades_from"
+            tar --extract --gzip --file "$RUNNER_TEMP/dist/support-chatbot-$version.tar.gz" --directory "$RUNNER_TEMP/release"
+          }
+          table='op.create_table("ci_upgrade", sa.Column("id", sa.Integer(), primary_key=True))'
+          release 0.0.1 "$VERSION" "$table"
+          release 0.0.2 0.0.1 "$table" 'raise RuntimeError("CI: a migration that fails")'
+          cd /opt/support-chatbot
+          sql() {
+            sudo docker compose exec -T postgres psql --username=sc --dbname=support_chatbot \
+              --tuples-only --no-align --command "$1"
+          }
+          healthy() {
+            test "$(sudo docker compose ps --format '{{.Health}}' | grep -c '^healthy$')" = 8
+            sudo cat caddy-root.crt > "$RUNNER_TEMP/root.crt"
+            curl --fail --silent --show-error --cacert "$RUNNER_TEMP/root.crt" \
+              https://localhost/api/health | jq --exit-status '.status == "ok"'
+          }
+
+          sudo "$RUNNER_TEMP/release/support-chatbot-0.0.1/sc" upgrade 0.0.1
+          sudo grep -x 'version=0.0.1' .installed
+          test "$(sql "SELECT to_regclass('ci_upgrade') IS NOT NULL")" = t
+          test "$(sql 'SELECT note FROM ci_marker')" = 'before the backup'
+          healthy
+
+          if sudo "$RUNNER_TEMP/release/support-chatbot-0.0.2/sc" upgrade 0.0.2 2> "$RUNNER_TEMP/failed.txt"; then
+            echo "sc upgrade succeeded with a migration that fails"; exit 1
+          fi
+          cat "$RUNNER_TEMP/failed.txt"
+          grep 'The upgrade to 0.0.2 failed while migrating the database' "$RUNNER_TEMP/failed.txt"
+          grep 'Rolled back: 0.0.1 runs again' "$RUNNER_TEMP/failed.txt"
+          sudo grep -x 'version=0.0.1' .installed
+          sudo docker compose ps --format '{{.Service}} {{.Image}}' | grep -x "api $BACKEND:0.0.1"
+          test "$(sql 'SELECT note FROM ci_marker')" = 'before the backup'
+          healthy
+          # Both upgrades left their pre-upgrade backup.
+          sudo docker compose run --rm -T --volume /var/backups/support-chatbot:/var/backups/support-chatbot \
+            restic snapshots --json --tag pre-upgrade | jq --exit-status 'length == 2'
       - name: Logs
         if: failure()
         run: |
@@ -247,7 +300,8 @@ jobs:
         run: |
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           trap 'docker logout ghcr.io' EXIT
-          python3 deploy/upgrade_test.py --candidate "$VERSION" --release-tag "$GITHUB_REF_NAME"
+          python3 deploy/upgrade_test.py --candidate "$VERSION" --release-tag "$GITHUB_REF_NAME" \
+            --tested-from "$RUNNER_TEMP/upgrades-from"
       - name: Push the images
         env:
           GH_TOKEN: ${{ github.token }}
@@ -260,6 +314,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 deploy/build_bundle.py "$VERSION" dist
+          # The bundle accepts upgrades from the release the upgrade test started from (ADR-0034).
+          python3 deploy/build_bundle.py "$VERSION" dist --upgrades-from "$(cat "$RUNNER_TEMP/upgrades-from")"
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes \
             "dist/support-chatbot-$VERSION.tar.gz" "dist/support-chatbot-$VERSION.tar.gz.sha256"

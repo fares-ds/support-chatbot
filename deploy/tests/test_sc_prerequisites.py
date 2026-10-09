@@ -46,3 +46,15 @@ def test_an_incomplete_bundle_is_named(host: FakeHost, tmp_path: Path) -> None:
     found = sc.prerequisite_problems(host, unpacked, tmp_path / "opt", ports=(80, 443))
 
     assert found == ["The bundle is missing Caddyfile: unpack the whole release archive."]
+
+
+def test_a_failed_command_names_itself_and_ends_with_whole_lines_of_its_output() -> None:
+    traceback = "".join(f'  File "migration.py", line {n}, in run_migrations\n' for n in range(30))
+    output = traceback + "RuntimeError: a migration that fails\n"
+
+    error = sc.CommandFailed(["docker", "compose", "run", "--rm", "migrate"], output)
+
+    message = str(error)
+    assert message.startswith("docker compose run failed:\n  File")
+    assert message.endswith("RuntimeError: a migration that fails")
+    assert len(message) < 600

@@ -737,7 +737,7 @@ The vendor installs, operates, upgrades and backs up every install over server a
 | --- | --- | --- |
 | OPS-1 | The vendor installs from a versioned bundle: the Compose file, an environment template and the server CLI. Images come from GitHub Container Registry (private), with a read-only token per install, from a machine account that can read only our packages ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md)). Caddy obtains certificates for the business's domain. | P0 |
 | OPS-2 | Minimum CPU, RAM and disk, and a recommended VPS, are published after the M0 benchmark. A GPU is optional. | P0 |
-| OPS-3 | `upgrade <version>` checks health, free disk and version compatibility; backs up; pulls the pinned images; migrates once in a one-off container; restarts; waits for health checks and a smoke test; and rolls back to the previous images on failure. | P0 |
+| OPS-3 | `upgrade <version>` checks health, free disk and version compatibility (from the release CI tested it from, [ADR-0034](adr/0034-upgrade-from-the-tested-release.md)); backs up; pulls the pinned images; migrates once in a one-off container; restarts; waits for health checks and a smoke test; and rolls back to the previous images on failure. | P0 |
 | OPS-4 | Migrations expand, then contract: a release only adds, and removes one release later. No downgrade migrations. CI tests every release by upgrading a copy of the previous release's database. | P0 |
 | OPS-5 | Upgrades run at quiet hours; the widget's retry and reconnect rules (RT-3, RT-5) cover the short outage. | P0 |
 | OPS-6 | Backups: the server's cron runs `backup` daily, independently of the app containers. It takes a database dump plus an archive of stored files, and restic encrypts them and sends them to an off-server repository. The encryption key and the repository's settings stay out of backups, with the vendor ([ADR-0033](adr/0033-backups-leave-out-the-encryption-key.md)). The vendor tests a restore regularly. | P0 |
@@ -911,6 +911,7 @@ How the first draft became this PRD. Each row links to its record.
 | 2026-10-08 | Install pull tokens are classic tokens from a machine account that can read only our two packages, one per install. | [ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md) |
 | 2026-10-08 | An install runs as a dedicated system user, `supportchatbot`, in `/opt/support-chatbot`; only it reads the secrets. | [ADR-0032](adr/0032-dedicated-service-account.md) |
 | 2026-10-08 | Backups leave out the encryption key: the vendor keeps each install's `.env` in a password manager, and a restore checks the key's fingerprint before changing anything. | [ADR-0033](adr/0033-backups-leave-out-the-encryption-key.md) |
+| 2026-10-08 | A release upgrades only from the release its upgrade test started from, or a later one; skipped releases are refused. | [ADR-0034](adr/0034-upgrade-from-the-tested-release.md) |
 | 2026-10-05 | Built by Fares alone, with Claude Code; no timeline, milestones only. | — |
 | 2026-10-05 | The Owner sets the AI's display name; "agent" means a human, "AI assistant" the bot. | [glossary](glossary.md) |
 
