@@ -323,3 +323,17 @@ def test_a_login_kept_by_a_credential_helper_is_named_as_such(tmp_path: Path) ->
 
     with pytest.raises(LookupError, match="credential helper"):
         sc.Host().registry_token_expiry(config)
+
+
+def test_a_malformed_token_never_reaches_the_output(tmp_path: Path) -> None:
+    import base64
+
+    secret = "ghp_" + "s" * 36
+    config = tmp_path / "config.json"
+    auth = base64.b64encode(f"u:{secret}\n\n".encode()).decode()  # pasted with newlines
+    config.write_text(json.dumps({"auths": {"ghcr.io": {"auth": auth}}}))
+
+    with pytest.raises(LookupError) as raised:
+        sc.Host().registry_token_expiry(config)
+
+    assert secret not in str(raised.value) and secret not in repr(raised.value)

@@ -208,6 +208,8 @@ class Host:
                 ) from error
             raise LookupError(f"no {REGISTRY} login in {docker_config}") from error
         token = login.partition(":")[2]
+        if not re.fullmatch(r"[A-Za-z0-9_]+", token):  # a header error would print it whole
+            raise LookupError(f"the {REGISTRY} login in {docker_config} is not a GitHub token")
         request = urllib.request.Request(
             "https://api.github.com/user",
             headers={"Authorization": f"token {token}", "User-Agent": "sc"},
