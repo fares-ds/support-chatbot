@@ -3,11 +3,12 @@ it drives."""
 
 import importlib.machinery
 import importlib.util
+import json
 import re
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -38,6 +39,9 @@ class Ran:
     cwd: Path | None
 
 
+SERVICES = ("caddy", "api", "worker", "postgres", "valkey", "tei-embed", "tei-rerank", "ollama")
+CHECKS = ("postgres", "valkey", "worker", "tei_embed", "tei_rerank", "ollama")
+"""What /api/health checks."""
 STAGED: str = sc.STAGED
 FILES: str = sc.FILES
 
@@ -112,6 +116,18 @@ class FakeHost:
     """Releases whose migration breaks the releases before them."""
     silent: set[str] = field(default_factory=set)
     """Releases whose worker never writes a heartbeat."""
+    services: dict[str, tuple[str, str, int]] = field(
+        default_factory=lambda: (
+            {name: ("running", "healthy", 0) for name in SERVICES} | {"migrate": ("exited", "", 0)}
+        )
+    )
+    """docker compose ps: each service's state, health and exit code."""
+    down_checks: set[str] = field(default_factory=set)
+    """Checks /api/health reports down, such as "ollama"."""
+    token: datetime | BaseException | None = field(
+        default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=60)
+    )
+    """When the registry token expires, None for never, or what checking it raises."""
     last_beat: float = field(default_factory=time.time)
     """When a worker last beat: on starting, and once more as it stops."""
 
@@ -167,6 +183,15 @@ class FakeHost:
         if "pg_dump" in args and stdout_to is not None:
             stdout_to.write_bytes(self.database)
             return ""
+        if args[2:3] == ["config"] and "--services" in args:
+            return "\n".join(self.services)
+        if args[2:3] == ["ps"]:
+            return "\n".join(
+                json.dumps({"Service": name, "State": state, "Health": health, "ExitCode": code})
+                for name, (state, health, code) in self.services.items()
+            )
+        if "valkey-cli" in args and "LLEN" in args:
+            return str(len(self.queue))
         if "valkey-cli" in args and "FLUSHALL" in args:
             self.queue.clear()
             return "OK"
@@ -207,10 +232,26 @@ class FakeHost:
             return self.health
         release = self.running
         broken = self.schema in self.breaking and release != self.schema
+        down = set(self.down_checks)
         if release in self.unhealthy or broken:
-            return '{"status": "down", "checks": {"postgres": "ok", "worker": "down"}}'
-        beat = datetime.fromtimestamp(self.last_beat, timezone.utc).isoformat()
-        return f'{{"status": "ok", "checks": {{"postgres": "ok"}}, "worker_heartbeat": "{beat}"}}'
+            down.add("worker")
+        checks = {name: "down" if name in down else "ok" for name in CHECKS}
+        return json.dumps(
+            {
+                "status": "down" if down else "ok",
+                "checks": checks,
+                "schema_revision": "0002",
+                "worker_heartbeat": datetime.fromtimestamp(
+                    self.last_beat, timezone.utc
+                ).isoformat(),
+            }
+        )
+
+    def registry_token_expiry(self, docker_config: Path) -> datetime | None:
+        self.ran.append(Ran(["token-expiry", str(docker_config)], None, None, None))
+        if isinstance(self.token, BaseException):
+            raise self.token
+        return self.token
 
     def _restic(
         self, args: list[str], command: list[str], staged: Path, stdout_to: Path | None

@@ -4,8 +4,8 @@
     sudo ./sc install --domain chat.example.com --registry-user fares-ds-installs
 
 One file, standard library only, run by the host's python3 (3.10 or later), so a fresh server
-needs nothing beyond Docker. `install` (#8), `backup` and `restore` (#9), and `upgrade` (#10)
-exist; `status`, `report` and `reset-password` follow.
+needs nothing beyond Docker. `install` (#8), `backup` and `restore` (#9), `upgrade` (#10) and
+`status` (#11) exist; `report` and `reset-password` follow.
 """
 
 import sys
@@ -26,9 +26,14 @@ import socket
 import ssl
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 INSTALL_DIR = Path("/opt/support-chatbot")
 SERVICE_USER = "supportchatbot"
@@ -188,13 +193,55 @@ class Host:
             )
         return output.strip()
 
+    def registry_token_expiry(self, docker_config: Path) -> "datetime | None":
+        """When the install's registry token expires, as GitHub reports for a classic token;
+        None if it never does. Raises LookupError when Docker holds no login for the registry,
+        PermissionError when GitHub refuses the token, and OSError when GitHub cannot be asked."""
+        config: object = None
+        try:
+            config = json.loads(docker_config.read_text(encoding="utf-8"))
+            login = base64.b64decode(config["auths"][REGISTRY]["auth"]).decode()  # type: ignore[index]
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            if isinstance(config, dict) and (config.get("credsStore") or config.get("credHelpers")):
+                raise LookupError(
+                    f"the {REGISTRY} login is kept by a credential helper, which sc cannot read"
+                ) from error
+            raise LookupError(f"no {REGISTRY} login in {docker_config}") from error
+        token = login.partition(":")[2]
+        request = urllib.request.Request(
+            "https://api.github.com/user",
+            headers={"Authorization": f"token {token}", "User-Agent": "sc"},
+        )
+        context = ssl.create_default_context()
+        try:
+            with urllib.request.urlopen(request, timeout=10, context=context) as response:  # noqa: S310
+                expiry = response.headers.get("github-authentication-token-expiration")
+        except urllib.error.HTTPError as error:
+            if error.code == 401:
+                raise PermissionError("GitHub refused the token") from None
+            expiry = error.headers.get("github-authentication-token-expiration")
+            if not expiry:
+                raise OSError(f"GitHub answered {error.code}") from None
+        return github_expiry(expiry) if expiry else None
+
     def fetch(self, url: str, cafile: Path | None) -> str:
         if not url.startswith("https://"):  # sc builds every URL it fetches
             raise ValueError(f"not an https URL: {url}")
         context = ssl.create_default_context(cafile=str(cafile) if cafile else None)
-        with urllib.request.urlopen(url, timeout=10, context=context) as response:  # noqa: S310
-            body: bytes = response.read()
+        try:
+            with urllib.request.urlopen(url, timeout=10, context=context) as response:  # noqa: S310
+                body: bytes = response.read()
+        except urllib.error.HTTPError as error:  # /api/health answers 503, naming what is down
+            body = error.read()
         return body.decode()
+
+
+def github_expiry(header: str) -> "datetime":
+    """GitHub-Authentication-Token-Expiration's date, such as "2027-01-01 01:30:00 +0700"; also
+    read with "UTC" for the offset. Raises ValueError for anything else."""
+    from datetime import datetime
+
+    return datetime.strptime(header.strip().replace(" UTC", " +0000"), "%Y-%m-%d %H:%M:%S %z")
 
 
 def _shell_words(args: Sequence[str], cwd: Path | None) -> str:
@@ -539,15 +586,21 @@ def _check_health(
     _say(f"Checking https://{domain} ...")
     copy_root = None
     if domain == "localhost":
-        cafile = install_dir / "caddy-root.crt"
 
         def copy_root() -> Path:
-            docker("compose", "cp", f"caddy:{CADDY_ROOT}", str(cafile))
-            return cafile
+            return _caddy_root(docker, install_dir)
 
     _wait_healthy(
         host, _health_url(domain, https_port), copy_root, timeout, retry_every, beat_after
     )
+
+
+def _caddy_root(docker: Callable[..., str], install_dir: Path) -> Path:
+    """Caddy's own certificate authority, which signs localhost, copied afresh: a new caddy
+    volume makes a new one."""
+    cafile = install_dir / "caddy-root.crt"
+    docker("compose", "cp", f"caddy:{CADDY_ROOT}", str(cafile))
+    return cafile
 
 
 def _health_url(domain: str, https_port: int) -> str:
@@ -592,11 +645,7 @@ def _wait_healthy(
 
 
 def _beat_since(beat: object, since: float) -> bool:
-    if not isinstance(beat, str):
-        return False
-    from datetime import datetime
-
-    return datetime.fromisoformat(beat.replace("Z", "+00:00")).timestamp() > since
+    return isinstance(beat, str) and _parse_time(beat) > since
 
 
 STAGED = "/backup/database"
@@ -819,6 +868,216 @@ def _restore(
     return 0
 
 
+OK, WARNING, PROBLEM = 0, 1, 2
+"""sc status's levels, and its exit codes: the monitoring plugins' convention."""
+LEVELS = {OK: "ok", WARNING: "warning", PROBLEM: "problem"}
+BACKUP_STALE_HOURS = 26
+"""The daily backup runs at 03:17; past this, a day's data is at risk (US-25)."""
+TOKEN_WARN_DAYS = 14
+"""How far ahead sc status warns before the registry token expires (ADR-0031)."""
+MODEL_CHECKS = ("tei_embed", "tei_rerank", "ollama")
+"""The local model services; external providers join with M3's model settings."""
+APP_CHECKS = ("postgres", "valkey", "worker")
+
+
+def status(host: Host, *, install_dir: Path) -> int:
+    """Whether the install is well (OPS-7): services, models, health, disk, the job queue, the
+    last backup and the registry token, one line each. Exits 0 when all is ok, 1 with a warning,
+    2 with a problem. Names, counts and times only: never message or document text (SEC-10)."""
+    values = _installed_env(install_dir, "status")
+    if values is None:
+        return PROBLEM
+    user = SERVICE_USER if host.is_root() else None
+
+    def docker(*args: str) -> str:
+        return host.run(["docker", *args], user=user, cwd=install_dir)
+
+    installed = _key_values(install_dir / ".installed")
+    domain = values["SC_DOMAIN"]
+    header = f"Support Chatbot {installed.get('version', 'unknown')} at https://{domain}"
+    dates = [f"installed {installed['installed'][:10]}"] if "installed" in installed else []
+    if "upgraded_from" in installed:
+        dates.append(
+            f"upgraded from {installed['upgraded_from']} on {installed.get('upgraded', '')[:10]}"
+        )
+    _say(header + (f" ({'; '.join(dates)})" if dates else ""))
+
+    report: dict[str, Any] = {}
+    unreachable = ""
+    try:
+        report = _health_report(host, install_dir, docker, values)
+    except (OSError, ValueError, CommandFailed) as error:
+        unreachable = f"https://{domain}/api/health did not answer: {error}"
+    checks: list[tuple[str, Callable[[], tuple[int, str]]]] = [
+        ("Services", lambda: _services_line(docker)),
+        ("Models", lambda: _checks_line(report, MODEL_CHECKS, unreachable)),
+        ("Health", lambda: _health_line(report, unreachable)),
+        ("Disk", lambda: _disk_line(host, install_dir, docker)),
+        ("Queue", lambda: _queue_line(docker)),
+        ("Last backup", lambda: _backup_line(install_dir)),
+        ("Registry token", lambda: _token_line(host, install_dir)),
+    ]
+    lines = []
+    for label, check in checks:
+        try:
+            lines.append((label, *check()))
+        except Exception as error:  # one line's surprise never hides the others
+            lines.append((label, PROBLEM, f"could not be checked: {error!r}"))
+    for label, level, text in lines:
+        _say(f"{label:<16}{LEVELS[level]:<9}{text}")
+    counts = {level: sum(1 for line in lines if line[1] == level) for level in (PROBLEM, WARNING)}
+    found = [
+        f"{count} {LEVELS[level]}{'s' if count > 1 else ''}"
+        for level, count in counts.items()
+        if count
+    ]
+    _say(f"Status: {', '.join(found) or 'ok'}")
+    return max(level for _, level, _ in lines)
+
+
+def _health_report(
+    host: Host, install_dir: Path, docker: Callable[..., str], values: dict[str, str]
+) -> dict[str, Any]:
+    domain = values["SC_DOMAIN"]
+    cafile = _caddy_root(docker, install_dir) if domain == "localhost" else None
+    url = _health_url(domain, int(values.get("SC_HTTPS_PORT", "443")))
+    report: dict[str, Any] = json.loads(host.fetch(url, cafile))
+    return report
+
+
+def _services_line(docker: Callable[..., str]) -> tuple[int, str]:
+    try:
+        expected = docker("compose", "config", "--services").split()
+        listed = docker("compose", "ps", "--all", "--format", "json").strip()
+    except CommandFailed as error:
+        return PROBLEM, f"docker compose did not answer: {error}"
+    rows = (
+        json.loads(listed)
+        if listed.startswith("[")
+        else [json.loads(line) for line in listed.splitlines() if line]
+    )
+    down = []
+    for name in expected:
+        containers = [row for row in rows if row.get("Service") == name]
+        if not containers:
+            down.append(f"{name} (not created)")
+        for row in containers:  # every container, so a healthy one cannot hide a stopped one
+            if name == "migrate":  # a one-off job: done is well
+                if row.get("State") != "exited" or row.get("ExitCode") != 0:
+                    down.append(f"migrate ({row.get('State')}, exit {row.get('ExitCode')})")
+            elif row.get("State") != "running":
+                down.append(f"{name} ({row.get('State')})")
+            elif row.get("Health") not in ("", "healthy"):
+                down.append(f"{name} ({row.get('Health')})")
+    if down:
+        return PROBLEM, f"down: {', '.join(down)}"
+    return OK, f"{len(expected) - ('migrate' in expected)} running and healthy; migrations done"
+
+
+def _checks_line(report: dict[str, Any], names: Sequence[str], unreachable: str) -> tuple[int, str]:
+    if unreachable:
+        return PROBLEM, unreachable
+    checks = report.get("checks", {})
+    down = [name for name in names if checks.get(name) != "ok"]
+    if down:
+        return PROBLEM, f"down: {', '.join(down)}"
+    return OK, f"{', '.join(names[:-1])} and {names[-1]} answer"
+
+
+def _health_line(report: dict[str, Any], unreachable: str) -> tuple[int, str]:
+    level, text = _checks_line(report, APP_CHECKS, unreachable)
+    if level != OK:
+        return level, text
+    beat = report.get("worker_heartbeat")
+    age = f"; the worker beat {_ago(time.time() - _parse_time(beat))}" if beat else ""
+    return OK, f"{text}; schema {report.get('schema_revision', 'unknown')}{age}"
+
+
+def _disk_line(host: Host, install_dir: Path, docker: Callable[..., str]) -> tuple[int, str]:
+    paths = [install_dir]
+    with contextlib.suppress(CommandFailed):  # Docker down shows on the Services line
+        paths.append(Path(docker("info", "--format", "{{.DockerRootDir}}")))
+    free = _free_gb(host, paths)
+    text = "; ".join(f"{path} {gb:.0f} GB free" for path, gb in free.items())
+    if min(free.values()) < MIN_UPGRADE_FREE_GB:
+        return PROBLEM, f"{text}: below {MIN_UPGRADE_FREE_GB} GB, backups and upgrades may fail"
+    return OK, text
+
+
+def _free_gb(host: Host, paths: Sequence[Path]) -> dict[Path, float]:
+    return {path: host.free_bytes(path) / 1024**3 for path in paths}
+
+
+def _queue_line(docker: Callable[..., str]) -> tuple[int, str]:
+    try:
+        waiting = int(docker("compose", "exec", "-T", "valkey", "valkey-cli", "LLEN", "celery"))
+    except (CommandFailed, ValueError) as error:
+        return PROBLEM, f"Valkey did not answer: {error}"
+    return OK, f"{waiting} job{'s' if waiting != 1 else ''} waiting"
+
+
+def _backup_line(install_dir: Path) -> tuple[int, str]:
+    try:
+        record = json.loads((install_dir / "backup-status.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return PROBLEM, "no backup has run yet: set up the repository, as README.md describes"
+    except (OSError, ValueError) as error:
+        return PROBLEM, f"backup-status.json cannot be read: {error}"
+    last_run = record.get("last_run") or {}
+    success = record.get("last_success")
+    if not success:
+        return PROBLEM, f"no backup has succeeded yet; the last run: {last_run.get('message')}"
+    age = time.time() - _parse_time(success)
+    when = f"{success[:16].replace('T', ' ')} ({_ago(age)})"
+    if age > BACKUP_STALE_HOURS * 3600:
+        return (
+            PROBLEM,
+            f"stale: the last success was {when}; the last run: {last_run.get('message')}",
+        )
+    if not last_run.get("ok"):
+        return WARNING, f"the last run failed: {last_run.get('message')}; the last success {when}"
+    return OK, f"{when}, snapshot {str(last_run.get('snapshot'))[:8]}"
+
+
+def _token_line(host: Host, install_dir: Path) -> tuple[int, str]:
+    try:
+        expiry = host.registry_token_expiry(install_dir / ".docker" / "config.json")
+    except LookupError as error:
+        if "credential helper" in str(error):
+            return WARNING, str(error)
+        return WARNING, f"{error}: log in again, as README.md describes"
+    except PermissionError:
+        return PROBLEM, "GitHub refused it: generate a new token, as README.md describes"
+    except (OSError, ValueError) as error:
+        return WARNING, f"api.github.com could not be asked: {error}"
+    if expiry is None:
+        return OK, "never expires"
+    left = expiry.timestamp() - time.time()
+    date = expiry.astimezone().strftime("%Y-%m-%d")  # the server's date
+    when = f"in {left / 3600:.0f} hours" if left < 86400 else f"in {left / 86400:.0f} days"
+    if left <= 0:
+        return PROBLEM, f"expired on {date}: generate a new token, as README.md describes"
+    if left <= TOKEN_WARN_DAYS * 86400:
+        return WARNING, f"expires {date}, {when}: generate a new one"
+    return OK, f"expires {date}, {when}"
+
+
+def _parse_time(text: str) -> float:
+    """A Unix time, from sc's own records or the API's ISO 8601 times."""
+    from datetime import datetime
+
+    text = re.sub(r"([+-]\d\d)(\d\d)$", r"\1:\2", text.replace("Z", "+00:00"))  # +0000 on 3.10
+    return datetime.fromisoformat(text).timestamp()
+
+
+def _ago(seconds: float) -> str:
+    if seconds < 120:
+        return f"{seconds:.0f} s ago"
+    if seconds < 7200:
+        return f"{seconds / 60:.0f} min ago"
+    return f"{seconds / 3600:.0f} h ago"
+
+
 def upgrade(
     host: Host,
     *,
@@ -855,8 +1114,7 @@ def upgrade(
     except CommandFailed as error:
         _fail(f"Docker is not running: {error}. Nothing was changed.")
         return 1
-    for path in (install_dir, docker_root):
-        free_gb = host.free_bytes(path) / 1024**3
+    for path, free_gb in _free_gb(host, (install_dir, docker_root)).items():
         if free_gb < min_free_gb:
             problems.append(
                 f"{min_free_gb:.0f} GB of free space is needed in {path} for the backup and the"
@@ -1240,6 +1498,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "upgrade", help="upgrade to this bundle's release, rolling back on failure"
     )
     advance.add_argument("version", help="this bundle's release, such as 1.5.0, as a check")
+    commands.add_parser("status", help="whether the install is well; exits 0, 1 or 2")
     commands.add_parser("backup", help="back up the database and the stored files now")
     back = commands.add_parser("restore", help="bring the data back from a backup")
     back.add_argument("--snapshot", default="latest", help="a snapshot ID (default: latest)")
@@ -1252,6 +1511,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             install_dir=INSTALL_DIR,
             target=arguments.version,
         )
+    if arguments.command == "status":
+        return status(Host(), install_dir=INSTALL_DIR)
     if arguments.command == "backup":
         return backup(Host(), install_dir=INSTALL_DIR)
     if arguments.command == "restore":
