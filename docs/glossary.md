@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-08, with the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, and the upgrade path (ADR-0034).
+Updated 2026-10-09, with the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
 
 ## People and roles
 
@@ -31,6 +31,7 @@ Updated 2026-10-08, with the machine account (ADR-0031), the service account (AD
 | CPU mode | How an install runs when its models use the server's CPU: a cheaper classifier, the answer model as the only large model loaded, and latency targets from the M0 benchmark ([ADR-0024](adr/0024-stack-review-corrections.md)). Fallbacks for the embedding check: [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md). |
 | Uncalibrated model | An embedding model or reranker whose relevance threshold the vendor has not calibrated. Retrieval applies no cut-off, and the dashboard marks the model ([ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). |
 | Release | A `vX.Y.Z` tag on `main`. It versions every image and the install bundle together ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). |
+| API contract | FastAPI's OpenAPI spec and the WebSocket events' JSON Schema, which `backend/tools/export_contract.py` exports without a server. The frontend's API client is generated from it, and CI fails when the committed client no longer matches ([ADR-0026](adr/0026-typed-api-client-from-openapi.md)). |
 | Install bundle | What the vendor installs and upgrades from: the Compose file, the environment template and the server CLI, published with each release (OPS-1). |
 | Service account | `supportchatbot`, the system user an install runs as. It owns `/opt/support-chatbot` and alone can read the install's secrets ([ADR-0032](adr/0032-dedicated-service-account.md)). |
 | Machine account | The vendor's second GitHub account. It holds each install's read-only pull token, and can read only our two packages ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md)). |
