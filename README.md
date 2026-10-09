@@ -39,4 +39,4 @@ You need Docker and [uv](https://docs.astral.sh/uv/).
 
 ## Workflow
 
-One short-lived branch per issue, squash-merged into `main` by pull request once CI passes. Pull request titles follow Conventional Commits. Releases are `vX.Y.Z` tags ([ADR-0027](docs/adr/0027-repository-layout-and-git-workflow.md)); [deploy/README.md](deploy/README.md) explains how to cut one, and how each install gets its pull token.
+One short-lived branch per issue, squash-merged into `main` by pull request once CI passes. CI pulls Docker Hub images logged in with the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, a read-only access token: anonymous pulls share the runners' addresses and hit Docker Hub's rate limit. Without the secrets, it pulls anonymously. Pull request titles follow Conventional Commits. Releases are `vX.Y.Z` tags ([ADR-0027](docs/adr/0027-repository-layout-and-git-workflow.md)); [deploy/README.md](deploy/README.md) explains how to cut one, and how each install gets its pull token.
