@@ -106,12 +106,21 @@ jobs:
     name: Compose stack
     runs-on: ubuntu-24.04
     env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       # Run the stack's own Ollama, which development leaves out by default.
       COMPOSE_PROFILES: ollama
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Log in to Docker Hub, for a pull limit of our own
+        # Anonymous pulls share the runners' addresses and hit Docker Hub's limit. Skipped where
+        # the secrets are missing, such as a fork's pull request.
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Make room for the Ollama image
         run: |
           df -h /
