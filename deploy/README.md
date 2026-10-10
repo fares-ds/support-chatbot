@@ -14,7 +14,7 @@ What the vendor copies to a business's server to install or upgrade Support Chat
 This directory also holds development files that stay out of the bundle:
 - `compose.dev.yaml` and `dev.env`, for the development stack;
 - `tei.dev.Dockerfile`;
-- `caddy/`, the Caddy image, with the dashboard's and widget's files. Until Docker republishes `caddy:2.11.7-alpine` with a fixed Go, it builds Caddy itself with a newer Go (see its Dockerfile);
+- `caddy/`, the Caddy image, with the dashboard's and widget's files. Until a Caddy release ships with a fixed Go and `golang.org/x/net`, it builds Caddy itself with both raised (see its Dockerfile);
 - `build_bundle.py`, `upgrade_test.py`, `tests/` and `pyproject.toml`, which configures their checks.
 
 ## Releases
