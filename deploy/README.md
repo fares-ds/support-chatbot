@@ -14,7 +14,7 @@ What the vendor copies to a business's server to install or upgrade Support Chat
 This directory also holds development files that stay out of the bundle:
 - `compose.dev.yaml` and `dev.env`, for the development stack;
 - `tei.dev.Dockerfile`;
-- `caddy/`, the Caddy image, with the dashboard's and widget's files;
+- `caddy/`, the Caddy image, with the dashboard's and widget's files. Until a Caddy release ships with a fixed Go and `golang.org/x/net`, it builds Caddy itself with both raised (see its Dockerfile);
 - `build_bundle.py`, `upgrade_test.py`, `tests/` and `pyproject.toml`, which configures their checks.
 
 ## Releases
@@ -31,8 +31,8 @@ The Release workflow (`.github/workflows/release.yml`) then:
 1. checks that the tag is on `main`;
 2. builds the backend image and the Caddy image for linux/amd64;
 3. scans both, and stops on a high or critical vulnerability that has a fix;
-4. pushes them to GitHub Container Registry as `ghcr.io/fares-ds/support-chatbot-backend:1.4.0` and `ghcr.io/fares-ds/support-chatbot-caddy:1.4.0`;
-5. runs the upgrade test from the previous release on those images, below;
+4. runs the upgrade test from the previous release on those images (below), and stops if it fails;
+5. pushes them to GitHub Container Registry as `ghcr.io/fares-ds/support-chatbot-backend:1.4.0` and `ghcr.io/fares-ds/support-chatbot-caddy:1.4.0`;
 6. builds the bundle with `python3 deploy/build_bundle.py 1.4.0 dist/ --upgrades-from 1.3.0`, recording the release the upgrade test started from, and attaches it and its checksum to a GitHub release named after the tag.
 
 `build_bundle.py` refuses to build when an image is not pinned, or when `compose.yaml` reads a setting that `env.template` does not list. Every pull request that touches the backend or `deploy/` runs the same build without publishing, and starts the bundle on the CI runner.
