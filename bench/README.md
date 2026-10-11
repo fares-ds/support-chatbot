@@ -14,6 +14,8 @@ Each turn runs Flow B's steps, as a real turn would:
 
 Every turn runs every step, whatever the classifier decides, so that runs compare like with like.
 
+**Classify only.** With `--classify-only`, each turn stops after Gate 1, for the classifier bake-off (#14). The run neither loads the knowledge base nor uses the answer model, so the classifier is the only model in memory, and each level runs every sample once unless `--turns` says otherwise. A sample's prompt then comes round again only after every other sample's, long after a runtime's prompt cache has let it go.
+
 **Prompts.** They follow Gate 1 and Gate 3 and fill each budget:
 - Filler exchanges stand in for earlier turns.
 - The budgets default to the PRD's and are parameters, so CPU installs can try lower ones.
@@ -31,6 +33,8 @@ Start the stack first: from the repository root, `docker compose up --build --de
 docker compose run --rm bench run configs/dev.toml
 docker compose run --rm bench run configs/dev.toml --dataset data/gov-uk
 docker compose run --rm bench run configs/dev.toml --concurrency 1,2,4 --turns 20 --label quiet-hour
+docker compose run --rm bench run configs/dev-embedding.toml --classify-only
+docker compose run --rm bench score results/A.json
 docker compose run --rm bench compare results/A.json results/B.json
 ```
 
@@ -107,10 +111,12 @@ Each run writes two files to `results/`, which git ignores; commit a run only on
 - **`<time>-<name>.json`** holds everything: the host, the dataset, the models, the calibration, the budgets, and per concurrency level:
   - the statistics;
   - each container's peak memory and its mean and peak CPU;
-  - every turn, with its timings, tokens, category, search query, sources and answer.
+  - every turn, with its timings, tokens, category, search query, sources and answer;
+  - the scores (below).
 
-  A later scorer can judge the classifier and the answers from it (#14, #15).
+  A later scorer can judge the answers from it (#15).
 - **`<time>-<name>.md`** is the summary:
+  - Gate 1's scores against the release gates (below);
   - p50 and p95 per step;
   - the first visible token, end to end, which is what the customer waits for;
   - tokens, and the answer's tokens per second;
@@ -122,7 +128,21 @@ With the PRD's part caps, an answer prompt reaches about 4,300 tokens with a sho
 
 PR #21 has the first numbers: the Mac with cloud models, and CI's x86-64 runner with Qwen2.5 0.5B.
 
-`compare` prints several runs side by side, matched by concurrency level. `METHOD_VERSION` in `bench/__init__.py` changes when results stop being comparable with earlier ones.
+### Gate 1's scores
+
+Every run scores each sample's first turn against the dataset's labels, per group and pooled, and sets each rate beside its release gate:
+
+- **Off-topic messages declined** (≥ 95%) and **on-topic messages wrongly declined** (≤ 2%). A message is declined when it gets a template reply: off_topic or smalltalk, as neither answers it.
+- **Requests for a person detected** (≥ 98%). With 25 to 30 requests per group, one miss puts a group below 98%, so read the pooled rate beside each group's.
+- **The right reply** for every sample, and for each case on its own: turns that need the earlier messages, a yes after an offer of a person, and injections.
+- **What each category was given**, pooled: the confusion table.
+- **Gate 1's p50 and p95 per group**, at each concurrency level.
+
+A turn that failed counts against every gate: it neither declined nor handed off. Each rate shows its counts, such as 97.3% (146/150), since a group's rate rests on few samples.
+
+`score` scores a saved run again against the dataset's current labels, for instance after a review corrects a category. Turns whose samples the dataset no longer has are left out and named.
+
+`compare` prints several runs side by side, matched by concurrency level, with Gate 1's rates per group for runs that have scores. It leaves out rows that no run has. `METHOD_VERSION` in `bench/__init__.py` changes when results stop being comparable with earlier ones.
 
 ## Data
 

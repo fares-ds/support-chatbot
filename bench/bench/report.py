@@ -5,7 +5,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from typing import Any
 
+from bench.data import CATEGORIES
 from bench.records import STEPS, TOKENS, TurnRecord
+from bench.score import FAILED, GATES, GROUPS
 from bench.stats import summarize
 
 _EMPTY = "-"
@@ -40,24 +42,33 @@ def level_stats(records: Sequence[TurnRecord]) -> dict[str, Any]:
 def summary_markdown(results: Mapping[str, Any]) -> str:
     levels = results["levels"]
     host, models, budgets = results["host"], results["models"], results["budgets"]
+    classify_only = results.get("classify_only", False)
+    answer = "not run" if classify_only else models["answer"]
     lines = [
         f"# Benchmark: {_run_name(results)}",
         "",
         f"- Docker host: {host['cpus']} CPUs, {_bytes(host['memory_bytes'])}, "
         f"{host['architecture']}, {host['os']}",
         *_dataset(results),
-        f"- Classifier: {models['classifier']} · Answer: {models['answer']}",
+        f"- Classifier: {models['classifier']} · Answer: {answer}",
         f"- Embedding: {models['embedding']} · Reranker: {models['reranker']}",
         f"- Budgets: classify {budgets['classify_in']:,} in, {budgets['classify_out']:,} out · "
         f"answer {budgets['answer_in']:,} in, {budgets['answer_out']:,} out",
         f"- Method {results['method_version']}, prompts {results['prompt_version']}",
-        *(_outcomes(level) for level in levels),
+        *(_outcomes(level, classify_only) for level in levels),
+        *_scores(results.get("scores")),
         "",
         "## Latency, in seconds",
         "",
-        "An abstain ends its answer early, so the answer's first token and first visible token",
-        "cover answered turns only.",
-        "",
+        *(
+            []
+            if classify_only
+            else [
+                "An abstain ends its answer early, so the answer's first token and first visible",
+                "token cover answered turns only.",
+                "",
+            ]
+        ),
     ]
     lines += _table(
         [
@@ -74,36 +85,50 @@ def summary_markdown(results: Mapping[str, Any]) -> str:
                 ],
             ]
             for step, label in STEPS.items()
+            if any(level["stats"]["steps"][step] for level in levels)
         ],
     )
-    lines += ["", "## Tokens", ""]
-    lines += _table(
-        [
-            "",
-            *[f"{name} · c={level['concurrency']}" for level in levels for name in ("p50", "max")],
-        ],
-        [
-            *(
+    token_rows = [
+        *(
+            [
+                label,
+                *[
+                    _count(level["stats"]["tokens"][key], name)
+                    for level in levels
+                    for name in ("p50", "max")
+                ],
+            ]
+            for key, label in TOKENS.items()
+            if any(level["stats"]["tokens"][key] for level in levels)
+        ),
+        *(
+            [
                 [
-                    label,
+                    "Answer tokens per second: p50, slowest",
                     *[
-                        _count(level["stats"]["tokens"][key], name)
+                        _speed(level["stats"]["tokens_per_second"], name)
                         for level in levels
-                        for name in ("p50", "max")
+                        for name in ("p50", "min")
                     ],
                 ]
-                for key, label in TOKENS.items()
-            ),
+            ]
+            if any(level["stats"]["tokens_per_second"] for level in levels)
+            else []
+        ),
+    ]
+    if token_rows:
+        lines += ["", "## Tokens", ""]
+        lines += _table(
             [
-                "Answer tokens per second",
+                "",
                 *[
-                    _speed(level["stats"]["tokens_per_second"], name)
+                    f"{name} · c={level['concurrency']}"
                     for level in levels
-                    for name in ("p50", "min")
+                    for name in ("p50", "max")
                 ],
             ],
-        ],
-    )
+            token_rows,
+        )
     lines += ["", "## Memory", ""]
     idle = results["idle"]["memory"]
     names = sorted(
@@ -153,21 +178,129 @@ def summary_markdown(results: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _outcomes(level: Mapping[str, Any]) -> str:
+def scores_markdown(results: Mapping[str, Any]) -> str:
+    """A run's scores alone, as `bench score` prints them."""
+    return "\n".join([f"# Scores: {_run_name(results)}", *_scores(results.get("scores"))]) + "\n"
+
+
+def _outcomes(level: Mapping[str, Any], classify_only: bool) -> str:
     stats = level["stats"]
     counts = stats["outcomes"]
+    done = (
+        f"{counts.get('classified', 0)} classified"
+        if classify_only
+        else f"{counts.get('answered', 0)} answered, {counts.get('abstained', 0)} abstained"
+    )
     return (
         f"- Concurrency {level['concurrency']}: {stats['turns']} turns in "
-        f"{level['duration']:.1f} s: {counts.get('answered', 0)} answered, "
-        f"{counts.get('abstained', 0)} abstained, {stats['errors']} failed"
+        f"{level['duration']:.1f} s: {done}, {stats['errors']} failed"
     )
+
+
+_CASES = {
+    "needs_history": "Right reply: needs the earlier messages",
+    "yes_after_offer": "Right reply: a yes after an offer of a person",
+    "injection": "Right reply: injections",
+}
+
+
+def _scores(scores: Mapping[str, Any] | None) -> list[str]:
+    """Gate 1's scores per group against the release gates, what each category was given, and
+    Gate 1's latency per group. Results from before #14 have none."""
+    if not scores:
+        return []
+    classification = scores["classification"]
+    columns = [*classification["groups"], "all"]
+
+    def row(label: str, counts: Mapping[str, Sequence[int]], gate: str = "") -> list[str]:
+        return [label, *[_rate(counts.get(column)) for column in columns], gate]
+
+    rows = [
+        row(
+            gate.label,
+            classification["gates"][key],
+            f"{'≥' if gate.at_least else '≤'} {gate.threshold:.0%}: "
+            + ("met" if gate.met(classification["gates"][key]["all"]) else "missed"),
+        )
+        for key, gate in GATES.items()
+        if classification["gates"][key]
+    ]
+    rows.append(row("Right reply: every sample", classification["right"]))
+    rows += [
+        row(label, classification["cases"][case])
+        for case, label in _CASES.items()
+        if classification["cases"].get(case)
+    ]
+    lines = [
+        "",
+        "## Gate 1: classification",
+        "",
+        f"{classification['turns']} turns scored against the dataset's labels. A template reply, "
+        "off_topic or smalltalk, counts as declined; a failed turn counts against every gate.",
+        "",
+        *_table(["", *[_group_name(c) for c in columns], "Release gate"], rows),
+    ]
+    if classification["unknown"]:
+        unknown = classification["unknown"]
+        lines += [
+            "",
+            f"Left out: {len(unknown)} turns whose samples the dataset no longer has, such as "
+            + ", ".join(unknown[:5])
+            + ".",
+        ]
+    given = [*CATEGORIES, FAILED]
+    lines += ["", "What each expected category was given, every group:", ""]
+    lines += _table(
+        ["Expected", *["Failed" if name == FAILED else name for name in given]],
+        [
+            [expected, *[_number(counts.get(name)) for name in given]]
+            for expected in CATEGORIES
+            if (counts := classification["confusion"].get(expected))
+        ],
+    )
+    latency = scores["classify_latency"]
+    groups = [g for g in columns if any(g in level["groups"] for level in latency)]
+    lines += ["", "Gate 1's seconds per group:", ""]
+    lines += _table(
+        [
+            "Group",
+            *[f"{name} · c={level['concurrency']}" for level in latency for name in ("p50", "p95")],
+        ],
+        [
+            [
+                _group_name(group),
+                *[
+                    _cell(level["groups"].get(group), name)
+                    for level in latency
+                    for name in ("p50", "p95")
+                ],
+            ]
+            for group in groups
+        ],
+    )
+    return lines
+
+
+def _group_name(group: str) -> str:
+    return "All" if group == "all" else group
+
+
+def _rate(count: Sequence[int] | None) -> str:
+    if not count or not count[1]:
+        return _EMPTY
+    hits, total = count
+    return f"{hits / total:.1%} ({hits}/{total})"
+
+
+def _number(value: int | None) -> str:
+    return str(value) if value else _EMPTY
 
 
 def compare_markdown(runs: Sequence[Mapping[str, Any]]) -> str:
     """One column per run, one row per statistic and concurrency level."""
     levels = sorted({level["concurrency"] for run in runs for level in run["levels"]})
     by_level = [{level["concurrency"]: level for level in run["levels"]} for run in runs]
-    rows = []
+    rows = _gate_rows(runs)
     for concurrency in levels:
         found = [run_levels.get(concurrency) for run_levels in by_level]
         for step, label in STEPS.items():
@@ -200,7 +333,34 @@ def compare_markdown(runs: Sequence[Mapping[str, Any]]) -> str:
             ]
         )
     header = ["", *[_run_name(run) for run in runs]]
+    rows = [row for row in rows if any(cell != _EMPTY for cell in row[1:])]
     return "\n".join(["# Benchmark comparison", "", *_table(header, rows)]) + "\n"
+
+
+def _gate_rows(runs: Sequence[Mapping[str, Any]]) -> list[list[str]]:
+    """Gate 1's rates per group, for runs that have scores."""
+    found = [run["scores"]["classification"] if run.get("scores") else None for run in runs]
+    present = {group for scores in found if scores for group in scores["groups"]}
+    groups = [*(group for group in GROUPS if group in present), "all"]
+    rows = []
+    for key, gate in GATES.items():
+        for group in groups:
+            rows.append(
+                [
+                    f"{gate.label} · {_group_name(group)}",
+                    *[
+                        _rate(scores["gates"][key].get(group)) if scores else _EMPTY
+                        for scores in found
+                    ],
+                ]
+            )
+    rows.append(
+        [
+            "Right reply: every sample · All",
+            *[_rate(scores["right"].get("all")) if scores else _EMPTY for scores in found],
+        ]
+    )
+    return rows
 
 
 def _dataset(results: Mapping[str, Any]) -> list[str]:

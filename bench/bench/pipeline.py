@@ -1,7 +1,8 @@
 """One turn of the AI pipeline, step by step (Flow B): classify, embed, search, rerank, answer.
 
 Every turn runs every step, whatever the classifier decides, so that runs compare like with
-like. The turn record keeps the category, so a later scorer can judge the classifier.
+like. The turn record keeps the category, so a later scorer can judge the classifier. A
+classify-only pipeline stops each turn after Gate 1, for the classifier bake-off (#14).
 """
 
 import time
@@ -44,6 +45,7 @@ class Pipeline:
         answer: ModelSettings,
         costs: PromptCosts,
         filler: Callable[[Sample], Sequence[Message]],
+        classify_only: bool = False,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._business = business
@@ -55,6 +57,7 @@ class Pipeline:
         self._answer = answer
         self._costs = costs
         self._filler = filler
+        self._classify_only = classify_only
         self._clock = clock
         self.origin = clock()
         """Turn start times count from here: the runner resets it at each level."""
@@ -81,6 +84,10 @@ class Pipeline:
             steps["classify"] = clock() - began
             record.category = classification.category
             query = record.search_query = classification.search_query or sample.message
+            if self._classify_only:
+                record.outcome = "classified"
+                steps["turn"] = clock() - start
+                return record
 
             step = "embed"
             began = clock()

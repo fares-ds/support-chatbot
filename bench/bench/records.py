@@ -37,7 +37,7 @@ class TurnRecord:
     tokens_per_second: float | None
     category: str | None
     outcome: str
-    """answered, abstained or error."""
+    """answered, abstained or error; classified when the run stops after Gate 1."""
     error: str | None = None
     classify_retried: bool = False
     """The classifier failed once and succeeded on Gate 1's one retry."""
