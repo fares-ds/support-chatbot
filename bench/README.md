@@ -19,6 +19,8 @@ Every turn runs every step, whatever the classifier decides, so that runs compar
 - **`--classify-only`** stops each turn after Gate 1, for the classifier bake-off (#14). The run neither loads the knowledge base nor uses the answer model, so the classifier is the only model in memory.
 - **`--retrieve-only`** stops each turn after the rerank, for the retrieval bake-off (#15). The search query is the configured classifier's, as in a full turn. With the embedding check as the classifier, no language model runs at all.
 
+**Some samples only.** `--samples on-topic` runs only the on-topic questions, answerable or not, and `--samples answerable` only the answerable ones, which are all recall@5 scores. A retrieval run then takes a third of the time.
+
 **Prompts.** They follow Gate 1 and Gate 3 and fill each budget:
 - Filler exchanges stand in for earlier turns.
 - The budgets default to the PRD's and are parameters, so CPU installs can try lower ones.
@@ -63,7 +65,7 @@ A run takes about a minute. `configs/dev-embedding.toml` runs the embedding chec
 
 ## Configurations
 
-One TOML file per model configuration, in `configs/`. Here are the fields, with their defaults:
+One TOML file per model configuration, in `configs/`. `configs/bake-offs/` holds the bake-offs' own, and `reports/` their reports, such as [round 1](reports/2026-10-11-bake-offs-round-1.md). Here are the fields, with their defaults:
 
 ```toml
 name = "cpu-4b"                       # names the results

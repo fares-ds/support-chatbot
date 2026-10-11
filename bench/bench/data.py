@@ -4,7 +4,7 @@ and the knowledge base's documents."""
 import re
 import tomllib
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -126,6 +126,24 @@ class Dataset:
     """The embedding check's words for yes."""
     provenance: dict[str, Provenance]
     """Per document."""
+
+
+_SAMPLE_SETS: dict[str, Callable[[Sample], bool]] = {
+    "all": lambda sample: True,
+    "on-topic": lambda sample: sample.category == "on_topic",
+    "answerable": lambda sample: sample.expect == "answer",
+}
+SAMPLE_SETS = tuple(_SAMPLE_SETS)
+"""Which of a dataset's samples a run takes: all of them, the on-topic questions (answerable
+or not), or the answerable ones, which are all that recall@5 scores."""
+
+
+def select_samples(samples: Sequence[Sample], which: str) -> list[Sample]:
+    """The samples of set `which`, refusing an empty set before a run starts its stack."""
+    selected = [sample for sample in samples if _SAMPLE_SETS[which](sample)]
+    if not selected:
+        raise ValueError(f"the dataset has no {which} samples")
+    return selected
 
 
 def load_dataset(directory: Path) -> Dataset:

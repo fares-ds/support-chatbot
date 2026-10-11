@@ -337,7 +337,7 @@ def _scores(scores: Mapping[str, Any] | None) -> list[str]:
         for key, gate in GATES.items()
         if gates[key]
     ]
-    rows.append(_group_row("Right reply: every sample", classification["right"], columns))
+    rows.append(_group_row("Right reply: every sample run", classification["right"], columns))
     rows += [
         _group_row(label, classification["cases"][case], columns)
         for case, label in _CASES.items()
@@ -468,7 +468,7 @@ def _gate_rows(runs: Sequence[Mapping[str, Any]]) -> list[list[str]]:
             )
     rows.append(
         [
-            "Right reply: every sample · All",
+            "Right reply: every sample run · All",
             *[_rate(scores["right"].get("all")) if scores else _EMPTY for scores in found],
         ]
     )
@@ -502,15 +502,20 @@ def _dataset(results: Mapping[str, Any]) -> list[str]:
     dataset = results.get("dataset")
     if not dataset:
         return []
+    which = results.get("sample_set", "all")
+    taken = "" if which == "all" else f", of which the {which} ones ran"
     return [
-        f"- Dataset: {dataset['name']}, {dataset['samples']} samples; "
+        f"- Dataset: {dataset['name']}, {dataset['samples']} samples{taken}; "
         f"{dataset['chunks']} chunks from {dataset['documents']} documents"
     ]
 
 
 def _run_name(run: Mapping[str, Any]) -> str:
+    """Its name, the samples it took if not all, its label, and when it started."""
+    which = run.get("sample_set", "all")
+    taken = f" [{which}]" if which != "all" else ""
     label = f" ({run['label']})" if run.get("label") else ""
-    return f"{run['name']}{label}, {run['started_at'][:16].replace('T', ' ')}"
+    return f"{run['name']}{taken}{label}, {run['started_at'][:16].replace('T', ' ')}"
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:

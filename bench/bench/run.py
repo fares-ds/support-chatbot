@@ -20,7 +20,7 @@ import httpx
 from bench import METHOD_VERSION
 from bench.classify import EmbeddingCheck
 from bench.config import Config
-from bench.data import Document, Sample, load_dataset
+from bench.data import Document, Sample, load_dataset, select_samples
 from bench.kb import Chunk, chunk_markdown
 from bench.llm import ModelClassifier, ModelSettings, calibrate, prompt_tokens
 from bench.pipeline import Pipeline, PromptCosts, Stop
@@ -40,8 +40,23 @@ CHUNKING = TokenEstimator({"en": 4.0, "fr": 3.5, "ar": 3.0})
 """Chunk sizes are the knowledge base's own, whatever model answers, so chunking uses fixed
 estimates rather than a model's calibration."""
 
-EMBEDDING_PREFIXES = {"e5": ("query: ", "passage: ")}
-"""What a model family expects before queries and documents, matched in its name."""
+EMBEDDING_PREFIXES = {
+    "e5": ("query: ", "passage: "),
+    "qwen3-embedding": (
+        "Instruct: Given a customer's question, retrieve the help passages that answer it\nQuery:",
+        "",
+    ),
+}
+"""What a model family expects before search queries and documents, matched in its name: e5's
+prefixes, and Qwen3-Embedding's instruction, which its queries take and its documents don't."""
+
+CLASSIFICATION_PREFIXES = {
+    "e5": "query: ",
+    "qwen3-embedding": "Instruct: Given a customer's message to a business's chat assistant, "
+    "find example messages of the same kind\nQuery:",
+}
+"""What a model family expects before the texts the embedding check compares, which are
+neither queries nor documents: both sides of a symmetric comparison."""
 
 SAMPLE_INTERVAL = 0.5
 """Seconds between memory and CPU samples."""
@@ -106,6 +121,7 @@ async def benchmark(
     label: str | None,
     out: Path,
     stops_after: Stop | None = None,
+    samples: str = "all",
 ) -> Path:
     """Runs the benchmark and returns the results file. The summary sits next to it. With no
     `turns`, each level runs every sample once. A run that `stops_after` a step uses no answer
@@ -140,10 +156,12 @@ async def benchmark(
             turns=turns,
             warmup=warmup,
             stops_after=stops_after,
+            sample_set=samples,
             header={
                 "name": config.name,
                 "label": label,
                 "stops_after": stops_after,
+                "sample_set": samples,
                 "started_at": started_at.isoformat(timespec="seconds"),
                 "method_version": METHOD_VERSION,
                 "prompt_version": PROMPT_VERSION,
@@ -174,16 +192,17 @@ async def _run(
     turns: int | None,
     warmup: int,
     stops_after: Stop | None,
+    sample_set: str,
     header: dict[str, Any],
     save: Callable[[dict[str, Any]], Path],
 ) -> dict[str, Any]:
     embedder = Tei(http, stack["tei_embed_url"])
     reranker = Tei(http, stack["tei_rerank_url"])
     embed_info, rerank_info = await embedder.info(), await reranker.info()
-    query_prefix, document_prefix = _prefixes(embed_info["model_id"])
+    query_prefix, document_prefix = embedding_prefixes(embed_info["model_id"])
 
     dataset = load_dataset(config.data.dataset)
-    samples = _interleaved(dataset.samples)
+    samples = _interleaved(select_samples(dataset.samples, sample_set))
     turns = turns or len(samples)
     documents = dataset.documents
     chunks, fingerprint = knowledge_base(documents, embed_info["model_id"])
@@ -261,8 +280,16 @@ async def _run(
         classify_fixed = await prompt_tokens(classifier_settings, model_classifier.messages(empty))
         classifier = model_classifier
     else:
+        classify_prefix = classification_prefix(embed_info["model_id"])
+
+        async def embed_for_check(texts: Sequence[str]) -> list[list[float]]:
+            return await embedder.embed([classify_prefix + text for text in texts])
+
         classifier = await EmbeddingCheck.build(
-            dataset.examples, yes=dataset.yes, embed=embed_query, margin=config.classifier.margin
+            dataset.examples,
+            yes=dataset.yes,
+            embed=embed_for_check,
+            margin=config.classifier.margin,
         )
         classify_estimator, classify_fixed = None, 0  # no prompt to measure
 
@@ -471,7 +498,7 @@ def knowledge_base(documents: Sequence[Document], embedding_model: str) -> tuple
             estimator=CHUNKING,
         )
     ]
-    _, document_prefix = _prefixes(embedding_model)
+    _, document_prefix = embedding_prefixes(embedding_model)
     return chunks, _fingerprint(embedding_model, document_prefix, chunks)
 
 
@@ -481,7 +508,14 @@ def write_results(path: Path, results: dict[str, Any]) -> None:
     path.with_suffix(".md").write_text(summary_markdown(results), encoding="utf-8")
 
 
-def _prefixes(model_id: str) -> tuple[str, str]:
+def classification_prefix(model_id: str) -> str:
+    for family, prefix in CLASSIFICATION_PREFIXES.items():
+        if family in model_id.lower():
+            return prefix
+    return ""
+
+
+def embedding_prefixes(model_id: str) -> tuple[str, str]:
     for family, prefixes in EMBEDDING_PREFIXES.items():
         if family in model_id.lower():
             return prefixes

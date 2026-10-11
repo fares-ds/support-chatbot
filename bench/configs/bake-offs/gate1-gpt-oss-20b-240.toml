@@ -1,0 +1,24 @@
+# The classifier bake-off (#14), in Ollama's cloud: Fares keeps this Mac's RAM free, so no
+# local model runs here (2026-10-11). Accuracy only: cloud latency says nothing about an
+# install, and the CPU candidates run on the VPS (#17). Run with --classify-only.
+#
+# This copy doubles Gate 1's output budget, to tell the budget from the accuracy: at the PRD's
+# 120 tokens, gpt-oss's reasoning cut 21 of Acme Pay's 400 replies short.
+
+name = "gate1-gpt-oss-20b-240"
+
+[classifier]
+mode = "model"
+model = "ollama_chat/gpt-oss:20b-cloud"
+reasoning_effort = "low"              # gpt-oss cannot turn reasoning off
+
+[answer]                              # unused with --classify-only
+model = "ollama_chat/gemma4:cloud"
+reasoning_effort = "none"
+
+[run]
+concurrency = [4]
+warmup = 2
+
+[budgets]
+classify_out = 240                    # the PRD allows 120

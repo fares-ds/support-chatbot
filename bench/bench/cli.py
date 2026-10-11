@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from bench.config import load_config
-from bench.data import load_dataset
+from bench.data import SAMPLE_SETS, load_dataset
 from bench.report import compare_markdown, scores_markdown
 from bench.score import scores
 
@@ -44,6 +44,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument("--warmup", type=int, help="warm-up turns (default: the configuration's)")
     run.add_argument("--label", help="added to the results' name, such as vps-4gb")
     run.add_argument("--out", type=Path, default=Path("results"), help="default: results/")
+    run.add_argument(
+        "--samples",
+        choices=SAMPLE_SETS,
+        default="all",
+        help="which samples run: answerable ones are all recall@5 scores (default: all)",
+    )
     stop = run.add_mutually_exclusive_group()
     stop.add_argument(
         "--classify-only",
@@ -126,6 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             label=arguments.label,
             out=arguments.out,
             stops_after=arguments.stops_after,
+            samples=arguments.samples,
         )
     )
     print(path.with_suffix(".md").read_text(encoding="utf-8"), end="")
