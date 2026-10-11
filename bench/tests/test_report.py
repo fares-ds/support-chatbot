@@ -1,9 +1,9 @@
 from dataclasses import asdict
 from typing import Any
 
-from bench.data import Sample
+from bench.data import ExpectedSource, Sample, Section
 from bench.records import TurnRecord
-from bench.report import compare_markdown, level_stats, summary_markdown
+from bench.report import compare_markdown, level_stats, scores_markdown, summary_markdown
 from bench.score import scores
 
 
@@ -40,7 +40,13 @@ def results(levels: list[dict[str, Any]], name: str = "dev") -> dict[str, Any]:
         "prompt_version": 1,
         "host": {"cpus": 4, "memory_bytes": 8 * 2**30, "architecture": "x86_64", "os": "Ubuntu"},
         "models": {"classifier": "c", "answer": "a", "embedding": "e", "reranker": "r"},
-        "budgets": {"classify_in": 1200, "classify_out": 120, "answer_in": 4500, "answer_out": 400},
+        "budgets": {
+            "classify_in": 1200,
+            "classify_out": 120,
+            "answer_in": 4500,
+            "answer_out": 400,
+            "sources": 2500,
+        },
         "idle": {"memory": {}},
         "levels": levels,
     }
@@ -140,7 +146,9 @@ def test_the_summary_scores_gate_1_per_group_against_the_release_gates() -> None
     ]
     run = results([with_turns(level(1, records), records)])
 
-    summary = summary_markdown(run | {"scores": scores(run["levels"], PEOPLE)})
+    summary = summary_markdown(
+        run | {"scores": scores(run["levels"], PEOPLE, stops_after="classify")}
+    )
 
     assert (
         "| Requests for a person detected | 50.0% (1/2) | 50.0% (1/2) | ≥ 98%: missed |" in summary
@@ -151,9 +159,11 @@ def test_the_summary_scores_gate_1_per_group_against_the_release_gates() -> None
 
 def test_a_classify_only_summary_leaves_out_the_steps_no_turn_reached() -> None:
     records = [classified("en-person-1", "human_request", 0.2), classified("en-poem", None)]
-    run = results([with_turns(level(1, records), records)]) | {"classify_only": True}
+    run = results([with_turns(level(1, records), records)]) | {"stops_after": "classify"}
 
-    summary = summary_markdown(run | {"scores": scores(run["levels"], PEOPLE)})
+    summary = summary_markdown(
+        run | {"scores": scores(run["levels"], PEOPLE, stops_after="classify")}
+    )
 
     assert "- Concurrency 1: 2 turns in 10.0 s: 1 classified, 1 failed" in summary
     assert "Answer: not run" in summary
@@ -165,7 +175,10 @@ def test_compare_sets_classifiers_gate_rates_side_by_side() -> None:
     def classifier_run(name: str, given: str) -> dict[str, Any]:
         records = [classified("en-person-1", "human_request"), classified("en-person-2", given)]
         run = results([with_turns(level(1, records), records)], name=name)
-        return run | {"classify_only": True, "scores": scores(run["levels"], PEOPLE)}
+        return run | {
+            "stops_after": "classify",
+            "scores": scores(run["levels"], PEOPLE, stops_after="classify"),
+        }
 
     comparison = compare_markdown(
         [classifier_run("embedding", "on_topic"), classifier_run("model", "human_request")]
@@ -173,3 +186,62 @@ def test_compare_sets_classifiers_gate_rates_side_by_side() -> None:
 
     assert "| Requests for a person detected · All | 50.0% (1/2) | 100.0% (2/2) |" in comparison
     assert "Answer: complete" not in comparison  # no run reached it
+
+
+QUESTIONS = [
+    Sample(
+        f"en-q{n}",
+        "en",
+        "en",
+        f"Question {n}",
+        expect="answer",
+        facts=("a fact",),
+        sources=(ExpectedSource((Section("plans.md", (heading,)),)),),
+    )
+    for n, heading in enumerate(("Prices", "Changes"), 1)
+]
+
+
+def answered(sample: str, *sections: str) -> TurnRecord:
+    """A full turn whose reranker's top chunks hold `sections`, all of which reached the
+    prompt."""
+    return TurnRecord(
+        **{
+            **vars(record(classify=0.2, rerank=0.3, turn=2.0)),
+            "sample": sample,
+            "retrieved": [
+                {"chunk": n, "document": "plans.md", "sections": [[section]]}
+                for n, section in enumerate(sections, 1)
+            ],
+            "sources": [f"Plans > {section}" for section in sections],
+            "prompt_chunks": [
+                {"chunk": n, "document": "plans.md", "sections": [[section]]}
+                for n, section in enumerate(sections, 1)
+            ],
+        }
+    )
+
+
+def test_the_summary_scores_recall_at_5_against_its_gate() -> None:
+    records = [answered("en-q1", "Prices"), answered("en-q2", "Prices")]
+    run = results([with_turns(level(1, records), records)])
+
+    run_scores = scores(run["levels"], QUESTIONS, stops_after=None)
+
+    summary = summary_markdown(run | {"scores": run_scores})
+
+    assert "| Retrieval recall@5 | 50.0% (1/2) | 50.0% (1/2) | ≥ 90%: missed |" in summary
+    assert "| Sources in the answer prompt | 50.0% (1/2) | 50.0% (1/2) |  |" in summary
+    assert "first of them that fit its 2,500 tokens" in summary
+    assert "| Retrieval recall@5 |" in scores_markdown(run | {"scores": run_scores})
+
+
+def test_compare_sets_runs_recall_side_by_side() -> None:
+    def retrieval_run(name: str, second: str) -> dict[str, Any]:
+        records = [answered("en-q1", "Prices"), answered("en-q2", second)]
+        run = results([with_turns(level(1, records), records)], name=name)
+        return run | {"scores": scores(run["levels"], QUESTIONS, stops_after=None)}
+
+    comparison = compare_markdown([retrieval_run("e5", "Prices"), retrieval_run("bge", "Changes")])
+
+    assert "| Retrieval recall@5 · All | 50.0% (1/2) | 100.0% (2/2) |" in comparison

@@ -1,6 +1,7 @@
 """What a turn records."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 STEPS = {
     "classify": "Classify (canned replies wait for this)",
@@ -37,7 +38,8 @@ class TurnRecord:
     tokens_per_second: float | None
     category: str | None
     outcome: str
-    """answered, abstained or error; classified when the run stops after Gate 1."""
+    """answered, abstained or error; classified or retrieved when the run stops after Gate 1 or
+    after the rerank."""
     error: str | None = None
     classify_retried: bool = False
     """The classifier failed once and succeeded on Gate 1's one retry."""
@@ -49,3 +51,9 @@ class TurnRecord:
     answer: str = ""
     sources: list[str] = field(default_factory=list)
     """The answer prompt's sources, as title and heading path."""
+    retrieved: list[dict[str, Any]] = field(default_factory=list)
+    """The reranker's top 5 chunks, best first: each one's chunk ID, document, and the heading
+    path of every section it holds text from, for recall@5."""
+    prompt_chunks: list[dict[str, Any]] = field(default_factory=list)
+    """The answer prompt's sources as `retrieved` records chunks: the reranker's best that fit
+    the sources budget, up to its max_sources."""

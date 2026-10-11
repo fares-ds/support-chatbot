@@ -1,7 +1,7 @@
 from typing import Any
 
-from bench.data import Sample
-from bench.score import GATES, classification_scores, classify_latency
+from bench.data import ExpectedSource, Sample, Section
+from bench.score import GATES, classification_scores, classify_latency, retrieval_scores, scores
 
 
 def sample(
@@ -183,3 +183,149 @@ def test_a_sample_is_scored_once_on_its_first_turn() -> None:
     scores = classification_scores(levels_of_turns, [sample("person", "human_request")])
 
     assert scores["gates"]["person_detected"]["all"] == [1, 1]
+
+
+def source(*copies: str) -> ExpectedSource:
+    """Each copy reads "file.md" or "file.md#Heading > Below it"."""
+    sections = []
+    for copy in copies:
+        document, _, path = copy.partition("#")
+        sections.append(Section(document, tuple(path.split(" > ")) if path else ()))
+    return ExpectedSource(tuple(sections))
+
+
+def question(id: str, *sources: ExpectedSource, language: str = "en") -> Sample:
+    return sample(id, "on_topic", language=language, facts=("a fact",), sources=sources)
+
+
+def chunk(document: str, *sections: str) -> dict[str, Any]:
+    """A retrieved chunk, as a turn records it."""
+    return {
+        "chunk": 1,
+        "document": document,
+        "sections": [section.split(" > ") if section else [] for section in sections],
+    }
+
+
+def searched(
+    id: str, *chunks: dict[str, Any], prompt: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """A turn that reranked, with its top chunks and the chunks its answer prompt took: by
+    default, all of them."""
+    return {
+        "sample": id,
+        "category": "on_topic",
+        "outcome": "answered",
+        "steps": {"classify": 0.1, "rerank": 0.2},
+        "retrieved": list(chunks),
+        "prompt_chunks": list(chunks) if prompt is None else prompt,
+    }
+
+
+def recall(
+    turns: list[dict[str, Any]], samples: list[Sample], *, prompts: bool = True
+) -> dict[str, Any]:
+    return retrieval_scores(turns, samples, prompts=prompts)
+
+
+def test_a_source_is_found_when_a_top_chunk_holds_its_section_or_one_below_it() -> None:
+    samples = [
+        question("own", source("plans.md#Prices")),
+        question("below", source("plans.md#Prices")),
+        question("beside", source("plans.md#Prices")),
+    ]
+    turns = [
+        searched("own", chunk("plans.md", "Intro", "Prices")),
+        searched("below", chunk("plans.md", "Prices > Students")),
+        searched("beside", chunk("plans.md", "Prices list"), chunk("other.md", "Prices")),
+    ]
+
+    assert recall(turns, samples)["recall"]["all"] == [2, 3]
+
+
+def test_any_copy_of_a_source_will_do_and_a_whole_document_takes_any_chunk() -> None:
+    samples = [
+        question("copy", source("fr-plans.md#Prix", "ar-plans.md#الأسعار")),
+        question("whole", source("plans.md")),
+    ]
+    turns = [
+        searched("copy", chunk("ar-plans.md", "الأسعار")),
+        searched("whole", chunk("plans.md", "")),
+    ]
+
+    assert recall(turns, samples)["recall"]["all"] == [2, 2]
+
+
+def test_recall_counts_each_source_and_each_question_that_found_them_all() -> None:
+    samples = [
+        question("two", source("plans.md#Prices"), source("plans.md#Changes")),
+        question("one", source("plans.md#Prices"), language="fr"),
+    ]
+    turns = [
+        searched("two", chunk("plans.md", "Prices")),
+        searched("one", chunk("plans.md", "Prices")),
+    ]
+
+    scores = recall(turns, samples)
+
+    assert scores["recall"] == {"en": [1, 2], "fr": [1, 1], "all": [2, 3]}
+    assert scores["complete"]["all"] == [1, 2]
+
+
+def test_only_the_chunks_that_reached_the_prompt_count_as_in_the_prompt() -> None:
+    samples = [question("cut", source("plans.md#Changes"))]
+    prices, changes = chunk("plans.md", "Prices"), chunk("plans.md", "Changes")
+    turns = [searched("cut", prices, changes, prompt=[prices])]
+
+    scores = recall(turns, samples)
+
+    assert (scores["recall"]["all"], scores["in_prompt"]["all"]) == ([1, 1], [0, 1])
+
+
+def test_a_prompt_source_ranked_below_the_top_5_is_in_the_prompt() -> None:
+    top = [chunk("plans.md", f"Other {n}") for n in range(5)]
+    sixth = chunk("plans.md", "Changes")
+
+    scores = recall(
+        [searched("deep", *top, prompt=[*top, sixth])],
+        [question("deep", source("plans.md#Changes"))],
+    )
+
+    assert (scores["recall"]["all"], scores["in_prompt"]["all"]) == ([0, 1], [1, 1])
+
+
+def test_only_answerable_questions_count_and_a_failed_turn_found_nothing() -> None:
+    samples = [
+        question("failed", source("plans.md#Prices")),
+        sample("handoff", "on_topic", expect="handoff"),
+    ]
+    turns = [turn("failed", None), searched("handoff", chunk("plans.md", "Prices"))]
+
+    scores = recall(turns, samples)
+
+    assert (scores["questions"], scores["recall"]["all"]) == (1, [0, 1])
+    assert scores["in_prompt"]["all"] == [0, 1]
+
+
+def test_a_run_that_never_searched_has_no_retrieval_scores() -> None:
+    levels = [{"concurrency": 1, "turns": [turn("on", "on_topic")]}]
+
+    assert "retrieval" not in scores(
+        levels, [question("on", source("plans.md"))], stops_after="classify"
+    )
+
+
+def test_a_run_whose_every_turn_failed_before_the_rerank_found_nothing() -> None:
+    levels = [{"concurrency": 1, "turns": [turn("q", None)]}]
+
+    run = scores(levels, [question("q", source("plans.md"))], stops_after="rerank")
+
+    assert run["retrieval"]["recall"]["all"] == [0, 1]
+
+
+def test_a_run_that_built_no_answer_prompt_has_nothing_in_the_prompt() -> None:
+    retrieve_only = searched("q", chunk("plans.md", "Prices"), prompt=[])
+
+    scores = recall([retrieve_only], [question("q", source("plans.md#Prices"))], prompts=False)
+
+    assert (scores["recall"]["all"], scores["in_prompt"]) == ([1, 1], {})

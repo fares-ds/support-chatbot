@@ -20,6 +20,7 @@ def test_score_scores_a_saved_run_against_the_datasets_labels(
                 "label": None,
                 "started_at": "2026-10-10T12:00:00+00:00",
                 "config": {"data": {"dataset": "data/acme-pay"}},
+                "budgets": {"sources": 2500},
                 "levels": [
                     {
                         "concurrency": 1,
