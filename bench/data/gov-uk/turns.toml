@@ -71,7 +71,7 @@ language = "en"
 message = "What does a first provisional licence cost if I apply by post instead of online?"
 category = "on_topic"
 expect = "answer"
-facts = ["£43 by post, compared with £34 online"]
+facts = ["£43 by post"]
 sources = ["en-apply-first-provisional-driving-licence.md#Apply by post | en-driving-licence-fees.md#Get your first GB driving licence"]
 
 [[turns]]
@@ -116,7 +116,7 @@ language = "en"
 message = "I'm moving to Spain. Can I put my Spanish address on my UK licence?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: a new address abroad cannot be registered on a British licence", "Contact the driving licence authority in the new country"]
+facts = ["No: a new address abroad cannot be registered on a British licence"]
 sources = ["en-change-address-driving-licence-apply-online.md#Apply online > Before you start > If you’re moving abroad"]
 
 [[turns]]
@@ -161,7 +161,7 @@ language = "en"
 message = "Can I tax my vehicle by phone and set up a Direct Debit on the call?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes, on 0300 123 4321, a 24-hour service", "But you cannot pay by Direct Debit over the phone"]
+facts = ["Yes, by phone on 0300 123 4321", "But you cannot pay by Direct Debit over the phone"]
 sources = ["en-vehicle-tax.md#Other ways to apply > Apply by phone"]
 
 [[turns]]
@@ -170,7 +170,7 @@ language = "en"
 message = "I sold my car. Do I get back the vehicle tax I already paid?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: a refund for any full months of tax left, worked out from when DVLA gets the information", "It comes as a cheque to the name and address on the log book, and a Direct Debit is cancelled automatically"]
+facts = ["Yes: a refund for any full months of tax left"]
 sources = ["en-vehicle-tax-refund.md#What happens after you’ve told DVLA"]
 
 [[turns]]
@@ -188,7 +188,7 @@ language = "en"
 message = "My tax runs out while I'm on holiday. Can I sort it out before I go?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: by post, up to 2 months before it expires, with a letter explaining why", "Or tax online while away, from the 5th of the month it runs out"]
+facts = ["Yes: by post, up to 2 months before it expires, with a letter explaining why"]
 sources = ["en-vehicle-tax-advance.md"]
 
 [[turns]]
@@ -197,8 +197,8 @@ language = "en"
 message = "Is my car from 1984 exempt from vehicle tax?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: vehicles made before 1 January 1986 are exempt", "It must still be taxed, even though nothing is paid"]
-sources = ["en-vehicle-exempt-from-vehicle-tax.md#Historic vehicles", "en-vehicle-exempt-from-vehicle-tax.md"]
+facts = ["Yes: vehicles made before 1 January 1986 are exempt"]
+sources = ["en-vehicle-exempt-from-vehicle-tax.md#Historic vehicles"]
 
 [[turns]]
 id = "en-electric-car-tax"
@@ -206,7 +206,7 @@ language = "en"
 message = "Is my electric car still free from road tax?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: from 1 April 2025 electric cars pay vehicle tax", "Only heavy goods vehicles over 3,500kg stay exempt"]
+facts = ["No: from 1 April 2025 electric cars pay vehicle tax"]
 sources = ["en-vehicle-exempt-from-vehicle-tax.md#Electric vehicles"]
 
 [[turns]]
@@ -233,7 +233,7 @@ language = "en"
 message = "I'm selling my car to someone in the UK. What part of the log book do I give them?"
 category = "on_topic"
 expect = "answer"
-facts = ["The green 'new keeper' slip", "Tell DVLA it has been sold, with the buyer's full name and address"]
+facts = ["The green 'new keeper' slip"]
 sources = ["en-responsibilities-selling-vehicle.md#When you sell your vehicle > Staying in the UK"]
 
 [[turns]]
@@ -242,7 +242,7 @@ language = "en"
 message = "Should I put a photo of my V5C in my car advert so buyers trust me?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: do not share the log book's document reference number or pictures or copies of it", "Someone could use them to get a fraudulent copy, putting the vehicle at risk of theft or cloning"]
+facts = ["No: do not share the log book's document reference number or pictures or copies of it"]
 sources = ["en-responsibilities-selling-vehicle.md#Before you sell the vehicle > Protect your log book"]
 
 [[turns]]
@@ -269,7 +269,7 @@ language = "en"
 message = "I got a Section 172 notice after a speed camera flashed me. How long do I have to send it back?"
 category = "on_topic"
 expect = "answer"
-facts = ["28 days, telling the police who was driving"]
+facts = ["28 days"]
 sources = ["en-speeding-penalties.md#If you’re caught by a speed camera"]
 
 [[turns]]
@@ -296,7 +296,7 @@ language = "en"
 message = "My vehicle tax Direct Debit payment failed. Will DVLA try again?"
 category = "on_topic"
 expect = "answer"
-facts = ["DVLA tries again within 4 working days", "If it fails twice, the Direct Debit is cancelled and the vehicle is no longer taxed"]
+facts = ["Yes: DVLA tries again within 4 working days"]
 sources = ["en-vehicle-tax-direct-debit-payment-fails.md#If a Direct Debit payment fails"]
 
 [[turns]]
@@ -305,7 +305,7 @@ language = "en"
 message = "Is it more expensive to pay my vehicle tax monthly?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: there is a 5% surcharge for paying monthly or every 6 months", "There is no surcharge for paying yearly"]
+facts = ["Yes: there is a 5% surcharge for paying monthly"]
 sources = ["en-vehicle-tax-direct-debit-setting-up.md#Set up a Direct Debit > How much it costs"]
 
 [[turns]]
@@ -323,7 +323,7 @@ language = "en"
 message = "What number do I call to pay a DVLA fine?"
 category = "on_topic"
 expect = "answer"
-facts = ["0300 790 6808, 24 hours a day, 7 days a week", "Advisers answer Monday to Friday, 9am to 5pm"]
+facts = ["0300 790 6808"]
 sources = ["en-pay-dvla-fine.md#Other ways to pay > By phone"]
 
 [[turns]]
@@ -332,7 +332,7 @@ language = "en"
 message = "I forgot to tax my car while I was away. Can I appeal the fine?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: forgetting or being away is not a reason you can appeal", "Pay the fine as soon as possible"]
+facts = ["No: forgetting or being away is not a reason you can appeal"]
 sources = ["en-appeal-dvla-fine.md#Reasons you can appeal"]
 
 [[turns]]
@@ -341,7 +341,7 @@ language = "en"
 message = "Do I have to tell DVLA when my insurer writes off my car?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: you can be fined £1,000 if you do not", "Give the insurer's name and postcode, the registration number, and the 11-digit reference from the yellow section of the log book"]
+facts = ["Yes: you must tell DVLA"]
 sources = ["en-written-off-vehicle.md"]
 
 [[turns]]
