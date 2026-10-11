@@ -36,15 +36,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument(
         "--turns",
         type=int,
-        help="turns per level (default: the configuration's, or every sample with --classify-only)",
+        help="turns per level (default: the configuration's, or every sample with --classify-only"
+        " or --retrieve-only)",
     )
     run.add_argument("--warmup", type=int, help="warm-up turns (default: the configuration's)")
     run.add_argument("--label", help="added to the results' name, such as vps-4gb")
     run.add_argument("--out", type=Path, default=Path("results"), help="default: results/")
-    run.add_argument(
+    stop = run.add_mutually_exclusive_group()
+    stop.add_argument(
         "--classify-only",
-        action="store_true",
+        action="store_const",
+        const="classify",
+        dest="stops_after",
         help="stop each turn after Gate 1, for the classifier bake-off (#14)",
+    )
+    stop.add_argument(
+        "--retrieve-only",
+        action="store_const",
+        const="rerank",
+        dest="stops_after",
+        help="stop each turn after the rerank, for the retrieval bake-off (#15)",
     )
 
     score = commands.add_parser(
@@ -66,7 +77,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments.command == "score":
         results = json.loads(arguments.results.read_text(encoding="utf-8"))
         dataset = load_dataset(arguments.dataset or Path(results["config"]["data"]["dataset"]))
-        rescored = results | {"scores": scores(results["levels"], dataset.samples)}
+        # Results from before #15 recorded no retrieved chunks, so only Gate 1 scores again.
+        turns = [turn for level in results["levels"] for turn in level["turns"]]
+        recorded = any("retrieved" in turn for turn in turns)
+        stops_after = results.get("stops_after") if recorded else "classify"
+        rescored = results | {
+            "scores": scores(results["levels"], dataset.samples, stops_after=stops_after)
+        }
         print(scores_markdown(rescored), end="")
         return 0
 
@@ -80,11 +97,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         benchmark(
             config,
             concurrency=arguments.concurrency or config.run.concurrency,
-            turns=arguments.turns or (None if arguments.classify_only else config.run.turns),
+            turns=arguments.turns or (None if arguments.stops_after else config.run.turns),
             warmup=config.run.warmup if arguments.warmup is None else arguments.warmup,
             label=arguments.label,
             out=arguments.out,
-            classify_only=arguments.classify_only,
+            stops_after=arguments.stops_after,
         )
     )
     print(path.with_suffix(".md").read_text(encoding="utf-8"), end="")

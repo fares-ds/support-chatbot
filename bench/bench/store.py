@@ -30,6 +30,12 @@ class Candidate:
     fulltext_rank: int | None
 
 
+def chunk_ids(chunks: Sequence[Chunk]) -> dict[int, Chunk]:
+    """The IDs `KnowledgeStore.load` gives the chunks: their places in its list, from 1. A run's
+    chunks keep them, as the knowledge base's fingerprint fixes their order."""
+    return dict(enumerate(chunks, 1))
+
+
 async def connect(*, host: str, user: str, password: str, product_database: str) -> asyncpg.Pool:
     """A pool on the bench database, which is created on first use."""
     admin = await asyncpg.connect(
@@ -97,7 +103,7 @@ class KnowledgeStore:
                 " VALUES ($1, $2, $3, $4, $5, $6)",
                 [
                     (n, c.title, " > ".join(c.heading_path), c.text, c.language, c.tokens)
-                    for n, c in enumerate(chunks, 1)
+                    for n, c in chunk_ids(chunks).items()
                 ],
             )
             await connection.executemany(

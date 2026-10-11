@@ -59,7 +59,10 @@ async def test_the_knowledge_base_finds_the_chunk_that_answers(
         chunk
         for document in load_documents(Path("data/acme-pay/kb"))
         for chunk in chunk_markdown(
-            document.markdown, language=document.language, estimator=CHUNKING
+            document.markdown,
+            document=document.name,
+            language=document.language,
+            estimator=CHUNKING,
         )
     ]
     store = KnowledgeStore(

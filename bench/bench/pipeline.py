@@ -1,25 +1,33 @@
 """One turn of the AI pipeline, step by step (Flow B): classify, embed, search, rerank, answer.
 
 Every turn runs every step, whatever the classifier decides, so that runs compare like with
-like. The turn record keeps the category, so a later scorer can judge the classifier. A
-classify-only pipeline stops each turn after Gate 1, for the classifier bake-off (#14).
+like. The turn record keeps the category and the reranker's top chunks, for the scorers. A
+pipeline can stop each turn early: after Gate 1, for the classifier bake-off (#14), or after the
+rerank, for the retrieval one (#15).
 """
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import aclosing
 from dataclasses import dataclass
+from typing import Literal
 
 from bench.answer import read_answer
 from bench.classify import Classification, Embed, EmbeddingCheck
 from bench.data import Sample
-from bench.kb import fuse
+from bench.kb import Chunk, fuse
 from bench.llm import ModelClassifier, ModelSettings, stream_answer
 from bench.prompts import Budgets, Business, Message, Source, answer_prompt, classify_prompt
 from bench.records import TurnRecord
 from bench.services import Tei
 from bench.store import Candidate, KnowledgeStore
 from bench.tokens import TokenEstimator
+
+TOP = 5
+"""The reranker's top chunks a turn records, for recall@5."""
+
+Stop = Literal["classify", "rerank"]
+"""Where a turn may stop early: after Gate 1, or after the rerank."""
 
 
 @dataclass(frozen=True)
@@ -45,9 +53,11 @@ class Pipeline:
         answer: ModelSettings,
         costs: PromptCosts,
         filler: Callable[[Sample], Sequence[Message]],
-        classify_only: bool = False,
+        chunks: Mapping[int, Chunk],
+        stops_after: Stop | None = None,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
+        """`chunks` are the knowledge base's, by the store's chunk ID."""
         self._business = business
         self._budgets = budgets
         self._classifier = classifier
@@ -57,7 +67,8 @@ class Pipeline:
         self._answer = answer
         self._costs = costs
         self._filler = filler
-        self._classify_only = classify_only
+        self._chunks = chunks
+        self._stops_after = stops_after
         self._clock = clock
         self.origin = clock()
         """Turn start times count from here: the runner resets it at each level."""
@@ -84,7 +95,7 @@ class Pipeline:
             steps["classify"] = clock() - began
             record.category = classification.category
             query = record.search_query = classification.search_query or sample.message
-            if self._classify_only:
+            if self._stops_after == "classify":
                 record.outcome = "classified"
                 steps["turn"] = clock() - start
                 return record
@@ -105,6 +116,11 @@ class Pipeline:
             order = await self._reranker.rerank(query, [c.text for c in merged]) if merged else []
             steps["rerank"] = clock() - began
             ranked = [merged[index] for index, _ in order]
+            record.retrieved = [self._retrieved(candidate) for candidate in ranked[:TOP]]
+            if self._stops_after == "rerank":
+                record.outcome = "retrieved"
+                steps["turn"] = clock() - start
+                return record
 
             step = "answer"
             prompt = answer_prompt(
@@ -119,6 +135,7 @@ class Pipeline:
                 fixed_tokens=self._costs.answer_fixed,
             )
             record.estimated_tokens["answer_in"] = prompt.tokens
+            record.prompt_chunks = [self._retrieved(c) for c in ranked[: len(prompt.sources)]]
             record.sources = [
                 f"{c.title} > {c.heading_path}" if c.heading_path else c.title
                 for c in ranked[: len(prompt.sources)]
@@ -151,6 +168,14 @@ class Pipeline:
         record.answer = timing.text
         record.outcome = "abstained" if timing.abstained else "answered"
         return record
+
+    def _retrieved(self, candidate: Candidate) -> dict[str, object]:
+        chunk = self._chunks[candidate.id]
+        return {
+            "chunk": candidate.id,
+            "document": chunk.document,
+            "sections": [list(section) for section in chunk.sections],
+        }
 
     async def _classify(self, sample: Sample, record: TurnRecord) -> Classification:
         if isinstance(self._classifier, EmbeddingCheck):

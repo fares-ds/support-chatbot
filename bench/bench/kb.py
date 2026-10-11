@@ -20,6 +20,10 @@ class Chunk:
     """Prefixed with the title and heading path (KB-6)."""
     language: str
     tokens: int
+    document: str = ""
+    """The file it comes from, such as fr-compte.md."""
+    sections: tuple[tuple[str, ...], ...] = ()
+    """The heading path of every section it holds text from, in order."""
 
 
 def fuse(rankings: Sequence[Sequence[int]], *, k: int = 60, limit: int = 20) -> list[int]:
@@ -40,6 +44,7 @@ class _Section:
 def chunk_markdown(
     markdown: str,
     *,
+    document: str,
     language: str,
     estimator: TokenEstimator,
     max_tokens: int = 500,
@@ -51,8 +56,17 @@ def chunk_markdown(
     title, sections = _parse(markdown)
 
     def chunk(units: list[tuple[int, str]]) -> Chunk:
-        path, text = _render(title, _regroup(sections, units))
-        return Chunk(title, path, text, language, estimator.tokens(text, language))
+        group = _regroup(sections, units)
+        path, text = _render(title, group)
+        return Chunk(
+            title,
+            path,
+            text,
+            language,
+            estimator.tokens(text, language),
+            document,
+            tuple(section.path for section in group),
+        )
 
     def room(section: _Section) -> int:
         """What a paragraph may take in a chunk of its own, after the heading path."""

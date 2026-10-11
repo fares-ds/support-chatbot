@@ -14,7 +14,10 @@ Each turn runs Flow B's steps, as a real turn would:
 
 Every turn runs every step, whatever the classifier decides, so that runs compare like with like.
 
-**Classify only.** With `--classify-only`, each turn stops after Gate 1, for the classifier bake-off (#14). The run neither loads the knowledge base nor uses the answer model, so the classifier is the only model in memory, and each level runs every sample once unless `--turns` says otherwise. A sample's prompt then comes round again only after every other sample's, long after a runtime's prompt cache has let it go.
+**Stopping early.** Each level of such a run goes through every sample once, unless `--turns` says otherwise. A sample's prompt then comes round again only after every other sample's, long after a runtime's prompt cache has let it go.
+
+- **`--classify-only`** stops each turn after Gate 1, for the classifier bake-off (#14). The run neither loads the knowledge base nor uses the answer model, so the classifier is the only model in memory.
+- **`--retrieve-only`** stops each turn after the rerank, for the retrieval bake-off (#15). The search query is the configured classifier's, as in a full turn. With the embedding check as the classifier, no language model runs at all.
 
 **Prompts.** They follow Gate 1 and Gate 3 and fill each budget:
 - Filler exchanges stand in for earlier turns.
@@ -34,6 +37,7 @@ docker compose run --rm bench run configs/dev.toml
 docker compose run --rm bench run configs/dev.toml --dataset data/gov-uk
 docker compose run --rm bench run configs/dev.toml --concurrency 1,2,4 --turns 20 --label quiet-hour
 docker compose run --rm bench run configs/dev-embedding.toml --classify-only
+docker compose run --rm bench run configs/dev-embedding.toml --retrieve-only
 docker compose run --rm bench score results/A.json
 docker compose run --rm bench compare results/A.json results/B.json
 ```
@@ -100,7 +104,7 @@ extra_containers = []                 # also measure these containers, outside t
 
 An external provider's model takes its API key from the environment, which `docker compose run` passes through by name: `docker compose run --rm -e OPENAI_API_KEY bench run configs/external.toml`. Send it only synthetic or public data, such as `data/`.
 
-The embedding model and the reranker are whatever the stack's TEI containers serve. The vendor sets them in the install's environment ([ADR-0030](../docs/adr/0030-vendor-sets-local-embedding-and-rerank-models.md)), and the results name them.
+The embedding model and the reranker are whatever the stack's TEI containers serve. The vendor sets them in the install's environment ([ADR-0030](../docs/adr/0030-vendor-sets-local-embedding-and-rerank-models.md)), and the results name them. To compare pairings, restart TEI with another `SC_EMBEDDING_MODEL` or `SC_RERANK_MODEL` and run `--retrieve-only`: a new embedding model changes the knowledge base's fingerprint, and the run reloads it.
 
 The harness gives each Ollama model a context window (`num_ctx`) that fits its prompts and replies. A model that both classifies and answers gets one size for both, because Ollama reloads a model when the size changes.
 
@@ -111,7 +115,7 @@ Each run writes two files to `results/`, which git ignores; commit a run only on
 - **`<time>-<name>.json`** holds everything: the host, the dataset, the models, the calibration, the budgets, and per concurrency level:
   - the statistics;
   - each container's peak memory and its mean and peak CPU;
-  - every turn, with its timings, tokens, category, search query, sources and answer;
+  - every turn, with its timings, tokens, category, search query, the reranker's top 5 chunks, the prompt's sources, and the answer;
   - the scores (below).
 
   A later scorer can judge the answers from it (#15).
@@ -140,9 +144,21 @@ Every run scores each sample's first turn against the dataset's labels, per grou
 
 A turn that failed counts against every gate: it neither declined nor handed off. Each rate shows its counts, such as 97.3% (146/150), since a group's rate rests on few samples.
 
+### Recall@5
+
+A run whose turns searched also scores retrieval, over each answerable question's first turn, per group and pooled:
+
+- **Retrieval recall@5** (≥ 90%): the sources found among the reranker's top 5 chunks, of all the sources the questions need. A source is found when a chunk holds its section, or a section below it, in any of its copies, such as its translation.
+- **Questions with every source** in the top 5.
+- **Sources in the answer prompt:** found among the chunks the prompt took, which fit its sources budget, 2,500 tokens by default. The last of them may be cut to fit, and it still counts. Retrieve-only runs build no prompt, so they leave this out.
+
+A turn that failed before the rerank found nothing. The knowledge bases are small, at 29 to 202 chunks, so recall reads higher than it would over an install's thousands; comparisons between pairings still hold.
+
+### Scoring again
+
 `score` scores a saved run again against the dataset's current labels, for instance after a review corrects a category. Turns whose samples the dataset no longer has are left out and named.
 
-`compare` prints several runs side by side, matched by concurrency level, with Gate 1's rates per group for runs that have scores. It leaves out rows that no run has. `METHOD_VERSION` in `bench/__init__.py` changes when results stop being comparable with earlier ones.
+`compare` prints several runs side by side, matched by concurrency level, with Gate 1's rates and recall@5 per group for runs that have scores. It leaves out rows that no run has. `METHOD_VERSION` in `bench/__init__.py` changes when results stop being comparable with earlier ones.
 
 ## Data
 
