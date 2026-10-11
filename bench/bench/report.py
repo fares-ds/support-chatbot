@@ -7,7 +7,15 @@ from typing import Any
 
 from bench.data import CATEGORIES
 from bench.records import STEPS, TOKENS, TurnRecord
-from bench.score import FAILED, GATES, GROUPS, RECALL_GATE, Gate
+from bench.score import (
+    ANSWER_GATES,
+    FAILED,
+    GATES,
+    GROUPS,
+    RECALL_GATE,
+    REPLY_LANGUAGES,
+    Gate,
+)
 from bench.stats import summarize
 
 _EMPTY = "-"
@@ -58,6 +66,7 @@ def summary_markdown(results: Mapping[str, Any]) -> str:
         *(_outcomes(level, stops_after) for level in levels),
         *_scores(results.get("scores")),
         *_retrieval(results.get("scores"), budgets),
+        *_answers(results.get("scores"), results.get("judgments")),
         "",
         "## Latency, in seconds",
         "",
@@ -186,6 +195,7 @@ def scores_markdown(results: Mapping[str, Any]) -> str:
         f"# Scores: {_run_name(results)}",
         *_scores(run_scores),
         *_retrieval(run_scores, results["budgets"]),
+        *_answers(run_scores, results.get("judgments")),
     ]
     return "\n".join(lines) + "\n"
 
@@ -230,6 +240,68 @@ def _retrieval(scores: Mapping[str, Any] | None, budgets: Mapping[str, Any]) -> 
         "",
         *_table(["", *[_group_name(c) for c in columns], "Release gate"], rows),
     ]
+
+
+def _answers(scores: Mapping[str, Any] | None, judgments: Mapping[str, Any] | None) -> list[str]:
+    """Gate 3's scores per group against its release gates, and the replies' languages. Runs
+    that stop early, and results from before #15, have none."""
+    answers = (scores or {}).get("answers")
+    if not answers or not answers["groups"]:
+        return []
+    columns = [*answers["groups"], "all"]
+    gates = answers["gates"]
+    rows = [
+        _group_row(gate.label, gates[key], columns, _verdict(gate, gates[key]))
+        for key, gate in ANSWER_GATES.items()
+        if gates.get(key)
+    ]
+    rows += [
+        _group_row(label, answers[key], columns)
+        for key, label in (
+            ("partly_correct", "Answerable questions partly answered: some facts, none wrong"),
+            ("abstained", "Answerable questions abstained on"),
+            ("cites_expected", "Answers citing a source that holds the facts"),
+            ("bad_citations", "Answers citing a source the prompt didn't have"),
+            ("cites_none", "Answers citing no source by number"),
+            ("unjudged", "Answers the judge could not judge"),
+            ("right_language", "Replies in the customer's language (ADR-0035)"),
+        )
+        if answers[key]
+    ]
+    if answers["judged"] and judgments:
+        intro = (
+            f"Judged by {judgments['judge']} on {judgments['judged_at'][:10]}: each expected "
+            "fact stated, contradicted or missing, and the claims no source supports. An answer "
+            "is correct when it states every fact and contradicts none."
+        )
+    else:
+        intro = (
+            "Not judged yet: `bench judge` adds correctness, unsupported claims and the replies' "
+            "languages. Code checks the rest."
+        )
+    lines = [
+        "",
+        "## Answers",
+        "",
+        intro,
+        "",
+        *_table(["", *[_group_name(c) for c in columns], "Release gate"], rows),
+    ]
+    languages = answers["languages"]
+    if languages:
+        lines += [
+            "",
+            "The replies' languages, as the judge names them; ar is Modern Standard Arabic:",
+            "",
+        ]
+        lines += _table(
+            ["Group", *REPLY_LANGUAGES],
+            [
+                [_group_name(group), *[_number(found.get(name)) for name in REPLY_LANGUAGES]]
+                for group, found in languages.items()
+            ],
+        )
+    return lines
 
 
 def _group_row(
@@ -378,7 +450,7 @@ def compare_markdown(runs: Sequence[Mapping[str, Any]]) -> str:
 
 
 def _gate_rows(runs: Sequence[Mapping[str, Any]]) -> list[list[str]]:
-    """Gate 1's rates and recall@5 per group, for runs that have scores."""
+    """Gate 1's rates, recall@5 and Gate 3's rates per group, for runs that have scores."""
     found = [run["scores"]["classification"] if run.get("scores") else None for run in runs]
     present = {group for scores in found if scores for group in scores["groups"]}
     groups = [*(group for group in GROUPS if group in present), "all"]
@@ -400,6 +472,19 @@ def _gate_rows(runs: Sequence[Mapping[str, Any]]) -> list[list[str]]:
             *[_rate(scores["right"].get("all")) if scores else _EMPTY for scores in found],
         ]
     )
+    answers = [run["scores"].get("answers") if run.get("scores") else None for run in runs]
+    present = {group for found in answers if found for group in found["groups"]}
+    for key, gate in ANSWER_GATES.items():
+        for group in [*(group for group in GROUPS if group in present), "all"]:
+            rows.append(
+                [
+                    f"{gate.label} · {_group_name(group)}",
+                    *[
+                        _rate(found["gates"].get(key, {}).get(group)) if found else _EMPTY
+                        for found in answers
+                    ],
+                ]
+            )
     recalls = [run["scores"].get("retrieval") if run.get("scores") else None for run in runs]
     present = {group for recall in recalls if recall for group in recall["groups"]}
     for group in [*(group for group in GROUPS if group in present), "all"]:

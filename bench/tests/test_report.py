@@ -218,6 +218,7 @@ def answered(sample: str, *sections: str) -> TurnRecord:
                 {"chunk": n, "document": "plans.md", "sections": [[section]]}
                 for n, section in enumerate(sections, 1)
             ],
+            "answer": "It costs 10 DA [1].",
         }
     )
 
@@ -233,6 +234,7 @@ def test_the_summary_scores_recall_at_5_against_its_gate() -> None:
     assert "| Retrieval recall@5 | 50.0% (1/2) | 50.0% (1/2) | ≥ 90%: missed |" in summary
     assert "| Sources in the answer prompt | 50.0% (1/2) | 50.0% (1/2) |  |" in summary
     assert "first of them that fit its 2,500 tokens" in summary
+    assert "Not judged yet" in summary
     assert "| Retrieval recall@5 |" in scores_markdown(run | {"scores": run_scores})
 
 
@@ -245,3 +247,40 @@ def test_compare_sets_runs_recall_side_by_side() -> None:
     comparison = compare_markdown([retrieval_run("e5", "Prices"), retrieval_run("bge", "Changes")])
 
     assert "| Retrieval recall@5 · All | 50.0% (1/2) | 100.0% (2/2) |" in comparison
+
+
+def verdicts(*facts: str) -> dict[str, Any]:
+    return {
+        "facts": [{"number": n, "verdict": v, "quote": ""} for n, v in enumerate(facts, 1)],
+        "unsupported_claims": [],
+        "language": "en",
+    }
+
+
+def test_the_summary_scores_judged_answers_against_gate_3s_gates() -> None:
+    records = [answered("en-q1", "Prices"), answered("en-q2", "Changes")]
+    judgments = {"en-q1": verdicts("stated"), "en-q2": verdicts("missing")}
+    run = results([with_turns(level(1, records), records)]) | {
+        "judgments": {
+            "judge": "ollama_chat/gpt-oss:120b-cloud",
+            "judged_at": "2026-10-11T12:00:00+00:00",
+            "turns": judgments,
+            "failed": {},
+        }
+    }
+    run_scores = scores(run["levels"], QUESTIONS, stops_after=None, judgments=judgments)
+
+    summary = summary_markdown(run | {"scores": run_scores})
+
+    assert "Judged by ollama_chat/gpt-oss:120b-cloud on 2026-10-11" in summary
+    assert (
+        "| Answer correctness, answerable questions | 50.0% (1/2) | 50.0% (1/2) | ≥ 85%: missed |"
+        in summary
+    )
+    assert "| Answers with unsupported claims | 0.0% (0/2) | 0.0% (0/2) | ≤ 3%: met |" in summary
+    assert "| en | 2 | - | - | - | - |" in summary  # the replies' languages
+    assert "Answer correctness, answerable questions" in scores_markdown(
+        run | {"scores": run_scores}
+    )
+    comparison = compare_markdown([run | {"scores": run_scores}])
+    assert "| Answer correctness, answerable questions · All | 50.0% (1/2) |" in comparison

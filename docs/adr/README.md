@@ -38,6 +38,7 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 | [0032](0032-dedicated-service-account.md) | An install runs as a dedicated service account | Accepted |
 | [0033](0033-backups-leave-out-the-encryption-key.md) | Backups leave out the encryption key | Accepted |
 | [0034](0034-upgrade-from-the-tested-release.md) | A release upgrades from the release CI tested it from | Accepted |
+| [0035](0035-darija-replies-in-arabic-script.md) | A Darija message gets its reply in Darija or Modern Standard Arabic | Accepted |
 
 ## Adding a decision
 

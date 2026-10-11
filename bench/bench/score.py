@@ -1,9 +1,10 @@
 """Scores a run's turns against the dataset's labels and the PRD's release gates: Gate 1's
-classification (#14) and retrieval recall@5 (#15).
+classification (#14), retrieval recall@5 and the answers (#15).
 
 A count is a pair, [hits, total], so that a reader sees how few samples a rate rests on.
 """
 
+import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -46,6 +47,33 @@ GATES = {
 RECALL_GATE = Gate("Retrieval recall@5", 0.90, at_least=True)
 """Over the reranker's top 5: the sources found, of all the sources answerable questions need."""
 
+ANSWER_GATES = {
+    "correct": Gate("Answer correctness, answerable questions", 0.85, at_least=True),
+    "unsupported": Gate("Answers with unsupported claims", 0.03, at_least=False),
+    "unanswerable_answered": Gate(
+        "Unanswerable questions answered instead of handed off", 0.10, at_least=False
+    ),
+}
+"""Gate 3's release gates, from the PRD. The first two take a judge (`bench judge`)."""
+
+REPLY_LANGUAGES = ("en", "fr", "ar", "darija", "other")
+"""What the judge names a reply's language: ar is Modern Standard Arabic, darija is Algerian
+Arabic in either script."""
+
+CUSTOMERS_LANGUAGES = {
+    "en": {"en"},
+    "fr": {"fr"},
+    "ar": {"ar"},
+    "darija-latin": {"darija", "ar"},
+    "darija-arabic": {"darija", "ar"},
+}
+"""The reply languages that are the customer's, per group: Darija takes Darija or Modern
+Standard Arabic, in Arabic script (ADR-0035)."""
+
+_CITATION = re.compile(r"\[[^\]\d]*?(\d+(?:\s*[,،]\s*\d+)*)\]")
+"""[1], or [1, 2], as Gate 3's rules ask an answer to cite its numbered sources; also the forms
+answers write them in, such as [1، 2] with an Arabic comma, or [source 6]."""
+
 
 def classification_scores(
     turns: Iterable[Mapping[str, Any]], samples: Sequence[Sample]
@@ -54,7 +82,7 @@ def classification_scores(
     whose levels each go through every sample would otherwise count it once per level. A failed
     turn counts against each gate."""
     groups = _groups(samples)
-    first, unknown = _first_turns(turns, samples)
+    first, unknown = first_turns(turns, samples)
     scored = {id: (sample, turn.get("category") or FAILED) for id, (sample, turn) in first.items()}
 
     def count(
@@ -105,7 +133,7 @@ def retrieval_scores(
     the rerank found nothing, and one that failed before its prompt had nothing in it. A source
     cut from the prompt's last chunk to fit its budget still counts as in the prompt."""
     groups = _groups(samples)
-    first, _ = _first_turns(turns, samples)
+    first, _ = first_turns(turns, samples)
     found: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
     complete: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
     in_prompt: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -135,6 +163,87 @@ def retrieval_scores(
     }
 
 
+def answer_scores(
+    turns: Iterable[Mapping[str, Any]],
+    samples: Sequence[Sample],
+    judgments: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, Any]:
+    """Gate 3's scores over each on-topic sample's first turn, per group and pooled. Code
+    checks abstains, handoffs and citations; with a judge's `judgments` by sample, also
+    correctness, unsupported claims and the reply's language. An answer is correct when it
+    states every expected fact and contradicts none. A failed turn is neither correct nor an
+    answer, so on an unanswerable question it counts against the gate. An answer the judge could
+    not judge, or whose verdicts are for other facts than the sample now has, is left out of the
+    judge's gates, and counted."""
+    groups = _groups(samples)
+    first, _ = first_turns(turns, samples)
+    counts: defaultdict[str, defaultdict[str, list[int]]] = defaultdict(
+        lambda: defaultdict(lambda: [0, 0])
+    )
+    languages: defaultdict[str, Counter[str]] = defaultdict(Counter)
+
+    def add(name: str, sample: Sample, hit: bool) -> None:
+        for key in (groups[sample.id], "all"):
+            counts[name][key][0] += hit
+            counts[name][key][1] += 1
+
+    for sample, turn in first.values():
+        if sample.category != "on_topic":
+            continue
+        answered = turn.get("outcome") == "answered"
+        judgment = (judgments or {}).get(sample.id) if answered else None
+        if judgment is not None and len(judgment["facts"]) != len(sample.facts):
+            judgment = None  # judged before the sample's facts changed: judge again
+        prompt = turn.get("prompt_chunks") or []
+        cited = citations(turn.get("answer") or "") if answered else []
+        if sample.expect == "handoff":
+            add("unanswerable_answered", sample, turn.get("outcome") != "abstained")
+        else:
+            add("abstained", sample, turn.get("outcome") == "abstained")
+            if judgments is not None and not (answered and judgment is None):
+                add("correct", sample, judgment is not None and _correct(judgment))
+                add("partly_correct", sample, judgment is not None and _partly(judgment))
+            if answered:
+                chunks = [prompt[n - 1] for n in cited if 1 <= n <= len(prompt)]
+                add("cites_expected", sample, any(_holds(chunks, s) for s in sample.sources))
+        if answered:
+            add("bad_citations", sample, any(not 1 <= n <= len(prompt) for n in cited))
+            add("cites_none", sample, not cited)
+        if answered and judgments is not None:
+            add("unjudged", sample, judgment is None)
+        if judgment is not None:
+            add("unsupported", sample, bool(judgment["unsupported_claims"]))
+            right = CUSTOMERS_LANGUAGES[groups[sample.id]]
+            add("right_language", sample, judgment["language"] in right)
+            for key in (groups[sample.id], "all"):
+                languages[key][judgment["language"]] += 1
+
+    gates = ("correct", "unsupported") if judgments is not None else ()
+    return {
+        "judged": judgments is not None,
+        "groups": [g for g in GROUPS if any(g in by_group for by_group in counts.values())],
+        "gates": {name: _ordered(counts[name]) for name in (*gates, "unanswerable_answered")},
+        **{
+            name: _ordered(counts[name])
+            for name in (
+                "partly_correct",
+                "abstained",
+                "cites_expected",
+                "bad_citations",
+                "cites_none",
+                "unjudged",
+                "right_language",
+            )
+        },
+        "languages": {group: dict(found) for group, found in _ordered(languages).items()},
+    }
+
+
+def citations(answer: str) -> list[int]:
+    """The source numbers an answer cites, in order."""
+    return [int(n) for found in _CITATION.findall(answer) for n in re.split(r"[,،]", found)]
+
+
 def classify_latency(
     levels: Iterable[Mapping[str, Any]], samples: Sequence[Sample]
 ) -> list[dict[str, Any]]:
@@ -161,11 +270,24 @@ def classify_latency(
     return latency
 
 
-def _first_turns(
+def _correct(judgment: Mapping[str, Any]) -> bool:
+    verdicts = [fact["verdict"] for fact in judgment["facts"]]
+    return bool(verdicts) and all(verdict == "stated" for verdict in verdicts)
+
+
+def _partly(judgment: Mapping[str, Any]) -> bool:
+    """Some expected facts stated, some missing, none contradicted: the weekly review's "partly
+    correct", which the correctness gate counts as not correct."""
+    verdicts = {fact["verdict"] for fact in judgment["facts"]}
+    return verdicts == {"stated", "missing"}
+
+
+def first_turns(
     turns: Iterable[Mapping[str, Any]], samples: Sequence[Sample]
 ) -> tuple[dict[str, tuple[Sample, Mapping[str, Any]]], list[str]]:
-    """Each sample's first turn: a run whose levels each go through every sample would
-    otherwise score it once per level. Also the turns' samples that the dataset lacks."""
+    """Each sample's first turn, the one every score reads: a run whose levels each go through
+    every sample would otherwise score it once per level. Also the turns' samples that the
+    dataset lacks."""
     by_id = {sample.id: sample for sample in samples}
     first: dict[str, tuple[Sample, Mapping[str, Any]]] = {}
     unknown = []
@@ -221,10 +343,15 @@ def _ordered[V](by_group: Mapping[str, V]) -> dict[str, V]:
 
 
 def scores(
-    levels: Sequence[Mapping[str, Any]], samples: Sequence[Sample], *, stops_after: str | None
+    levels: Sequence[Mapping[str, Any]],
+    samples: Sequence[Sample],
+    *,
+    stops_after: str | None,
+    judgments: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """A run's scores, as its results file keeps them: Gate 1's over each sample's first turn,
-    and Gate 1's latency per level; and recall, unless the run `stops_after` classifying."""
+    and Gate 1's latency per level; recall, unless the run `stops_after` classifying; and the
+    answers', with a judge's `judgments` if any, when the run answered."""
     turns = [turn for level in levels for turn in level["turns"]]
     result = {
         "classification": classification_scores(turns, samples),
@@ -232,4 +359,6 @@ def scores(
     }
     if stops_after != "classify":
         result["retrieval"] = retrieval_scores(turns, samples, prompts=stops_after is None)
+    if stops_after is None:
+        result["answers"] = answer_scores(turns, samples, judgments)
     return result

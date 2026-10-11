@@ -20,7 +20,7 @@ import httpx
 from bench import METHOD_VERSION
 from bench.classify import EmbeddingCheck
 from bench.config import Config
-from bench.data import Sample, load_dataset
+from bench.data import Document, Sample, load_dataset
 from bench.kb import Chunk, chunk_markdown
 from bench.llm import ModelClassifier, ModelSettings, calibrate, prompt_tokens
 from bench.pipeline import Pipeline, PromptCosts, Stop
@@ -186,17 +186,7 @@ async def _run(
     samples = _interleaved(dataset.samples)
     turns = turns or len(samples)
     documents = dataset.documents
-    chunks = [
-        chunk
-        for document in documents
-        for chunk in chunk_markdown(
-            document.markdown,
-            document=document.name,
-            language=document.language,
-            estimator=CHUNKING,
-        )
-    ]
-    fingerprint = _fingerprint(embed_info["model_id"], document_prefix, chunks)
+    chunks, fingerprint = knowledge_base(documents, embed_info["model_id"])
     if stops_after != "classify" and await store.loaded_fingerprint() != fingerprint:
         logger.info(
             "Loading the knowledge base: %d chunks from %d documents", len(chunks), len(documents)
@@ -468,6 +458,29 @@ def _with_window(settings: ModelSettings, num_ctx: int) -> ModelSettings:
     )
 
 
+def knowledge_base(documents: Sequence[Document], embedding_model: str) -> tuple[list[Chunk], str]:
+    """The documents' chunks, in the order that gives their store IDs, and the fingerprint the
+    store keeps for them with this embedding model."""
+    chunks = [
+        chunk
+        for document in documents
+        for chunk in chunk_markdown(
+            document.markdown,
+            document=document.name,
+            language=document.language,
+            estimator=CHUNKING,
+        )
+    ]
+    _, document_prefix = _prefixes(embedding_model)
+    return chunks, _fingerprint(embedding_model, document_prefix, chunks)
+
+
+def write_results(path: Path, results: dict[str, Any]) -> None:
+    """The results file, and its summary beside it."""
+    path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.with_suffix(".md").write_text(summary_markdown(results), encoding="utf-8")
+
+
 def _prefixes(model_id: str) -> tuple[str, str]:
     for family, prefixes in EMBEDDING_PREFIXES.items():
         if family in model_id.lower():
@@ -567,6 +580,5 @@ def _save(
     out.mkdir(parents=True, exist_ok=True)
     stem = started_at.strftime("%Y%m%d-%H%M%S") + f"-{name}" + (f"-{label}" if label else "")
     path = out / f"{stem}.json"
-    path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    path.with_suffix(".md").write_text(summary_markdown(results), encoding="utf-8")
+    write_results(path, results)
     return path
