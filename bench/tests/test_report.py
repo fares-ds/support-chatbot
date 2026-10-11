@@ -1,7 +1,10 @@
+from dataclasses import asdict
 from typing import Any
 
+from bench.data import Sample
 from bench.records import TurnRecord
 from bench.report import compare_markdown, level_stats, summary_markdown
+from bench.score import scores
 
 
 def record(**steps: float) -> TurnRecord:
@@ -87,7 +90,7 @@ def test_the_summary_shows_tokens_and_the_answer_speed() -> None:
     summary = summary_markdown(results([level(1, records)]))
 
     assert "| Answer in | 4,440 | 4,480 |" in summary  # p50 and max
-    assert "| Answer tokens per second | 15.0 | 10.0 |" in summary  # p50 and slowest
+    assert "| Answer tokens per second: p50, slowest | 15.0 | 10.0 |" in summary
 
 
 def test_the_summary_shows_the_cores_each_container_used() -> None:
@@ -104,3 +107,69 @@ def test_the_summary_counts_each_levels_outcomes() -> None:
     summary = summary_markdown(results([level(2, records)]))
 
     assert "- Concurrency 2: 3 turns in 10.0 s: 2 answered, 1 abstained, 0 failed" in summary
+
+
+def classified(sample: str, category: str | None, seconds: float = 0.2) -> TurnRecord:
+    """A turn of a classify-only run."""
+    return TurnRecord(
+        **{
+            **vars(record(classify=seconds, turn=seconds)),
+            "sample": sample,
+            "category": category,
+            "outcome": "classified" if category else "error",
+        }
+    )
+
+
+def with_turns(level: dict[str, Any], records: list[TurnRecord]) -> dict[str, Any]:
+    return level | {"turns": [asdict(r) for r in records]}
+
+
+PEOPLE = [
+    Sample("en-person-1", "en", "en", "Can I talk to someone?", category="human_request"),
+    Sample("en-person-2", "en", "en", "A human, please", category="human_request"),
+    Sample("en-poem", "en", "en", "Write me a poem", category="off_topic"),
+]
+
+
+def test_the_summary_scores_gate_1_per_group_against_the_release_gates() -> None:
+    records = [
+        classified("en-person-1", "human_request"),
+        classified("en-person-2", "on_topic"),
+        classified("en-poem", "smalltalk"),
+    ]
+    run = results([with_turns(level(1, records), records)])
+
+    summary = summary_markdown(run | {"scores": scores(run["levels"], PEOPLE)})
+
+    assert (
+        "| Requests for a person detected | 50.0% (1/2) | 50.0% (1/2) | ≥ 98%: missed |" in summary
+    )
+    assert "| Off-topic messages declined | 100.0% (1/1) | 100.0% (1/1) | ≥ 95%: met |" in summary
+    assert "| human_request | 1 | - | 1 | - | - |" in summary  # given on_topic once
+
+
+def test_a_classify_only_summary_leaves_out_the_steps_no_turn_reached() -> None:
+    records = [classified("en-person-1", "human_request", 0.2), classified("en-poem", None)]
+    run = results([with_turns(level(1, records), records)]) | {"classify_only": True}
+
+    summary = summary_markdown(run | {"scores": scores(run["levels"], PEOPLE)})
+
+    assert "- Concurrency 1: 2 turns in 10.0 s: 1 classified, 1 failed" in summary
+    assert "Answer: not run" in summary
+    assert "| Rerank |" not in summary
+    assert "| en | 0.20 | 0.20 |" in summary  # Gate 1's seconds for the group
+
+
+def test_compare_sets_classifiers_gate_rates_side_by_side() -> None:
+    def classifier_run(name: str, given: str) -> dict[str, Any]:
+        records = [classified("en-person-1", "human_request"), classified("en-person-2", given)]
+        run = results([with_turns(level(1, records), records)], name=name)
+        return run | {"classify_only": True, "scores": scores(run["levels"], PEOPLE)}
+
+    comparison = compare_markdown(
+        [classifier_run("embedding", "on_topic"), classifier_run("model", "human_request")]
+    )
+
+    assert "| Requests for a person detected · All | 50.0% (1/2) | 100.0% (2/2) |" in comparison
+    assert "Answer: complete" not in comparison  # no run reached it

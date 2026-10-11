@@ -29,6 +29,7 @@ from bench.records import TurnRecord
 from bench.report import level_stats, summary_markdown
 from bench.resources import ResourceTracker, cpu_nanoseconds, memory_bytes
 from bench.runner import run_level
+from bench.score import scores
 from bench.services import Container, Docker, Tei, ollama_info
 from bench.store import KnowledgeStore, connect
 from bench.tokens import TokenEstimator, calibration_texts
@@ -100,12 +101,15 @@ async def benchmark(
     config: Config,
     *,
     concurrency: Sequence[int],
-    turns: int,
+    turns: int | None,
     warmup: int,
     label: str | None,
     out: Path,
+    classify_only: bool = False,
 ) -> Path:
-    """Runs the benchmark and returns the results file. The summary sits next to it."""
+    """Runs the benchmark and returns the results file. The summary sits next to it. With no
+    `turns`, each level runs every sample once. A classify-only run stops each turn after Gate 1,
+    and neither loads the knowledge base nor uses the answer model."""
     started_at = datetime.now(UTC)
     async with AsyncExitStack() as resources:
         docker = Docker()
@@ -135,9 +139,11 @@ async def benchmark(
             concurrency=concurrency,
             turns=turns,
             warmup=warmup,
+            classify_only=classify_only,
             header={
                 "name": config.name,
                 "label": label,
+                "classify_only": classify_only,
                 "started_at": started_at.isoformat(timespec="seconds"),
                 "method_version": METHOD_VERSION,
                 "prompt_version": PROMPT_VERSION,
@@ -165,8 +171,9 @@ async def _run(
     stack: dict[str, str],
     store: KnowledgeStore,
     concurrency: Sequence[int],
-    turns: int,
+    turns: int | None,
     warmup: int,
+    classify_only: bool,
     header: dict[str, Any],
     save: Callable[[dict[str, Any]], Path],
 ) -> dict[str, Any]:
@@ -177,6 +184,7 @@ async def _run(
 
     dataset = load_dataset(config.data.dataset)
     samples = _interleaved(dataset.samples)
+    turns = turns or len(samples)
     documents = dataset.documents
     chunks = [
         chunk
@@ -186,7 +194,7 @@ async def _run(
         )
     ]
     fingerprint = _fingerprint(embed_info["model_id"], document_prefix, chunks)
-    if await store.loaded_fingerprint() != fingerprint:
+    if not classify_only and await store.loaded_fingerprint() != fingerprint:
         logger.info(
             "Loading the knowledge base: %d chunks from %d documents", len(chunks), len(documents)
         )
@@ -221,29 +229,35 @@ async def _run(
         if config.classifier.mode == "model" and config.classifier.model
         else None
     )
-    answer, classifier_settings = _context_windows(answer, classifier_settings, budgets)
+    answer, classifier_settings = _context_windows(
+        answer, classifier_settings, budgets, answers=not classify_only
+    )
 
     logger.info("Measuring how the models count tokens")
     texts = _calibration_texts(chunks, dataset.samples)
-    answer_estimator = await calibrate(answer, texts)
-    skeleton = answer_prompt(
-        business=dataset.business,
-        sources=[],
-        history=[],
-        message="",
-        language="en",
-        filler=[],
-        budgets=budgets,
-        estimator=answer_estimator,
-        fixed_tokens=0,
-    )
-    answer_fixed = await prompt_tokens(answer, skeleton.messages)
+    answer_estimator: TokenEstimator | None = None
+    answer_fixed = 0
+    if not classify_only:
+        answer_estimator = await calibrate(answer, texts)
+        skeleton = answer_prompt(
+            business=dataset.business,
+            sources=[],
+            history=[],
+            message="",
+            language="en",
+            filler=[],
+            budgets=budgets,
+            estimator=answer_estimator,
+            fixed_tokens=0,
+        )
+        answer_fixed = await prompt_tokens(answer, skeleton.messages)
     classifier: ModelClassifier | EmbeddingCheck
+    classify_estimator: TokenEstimator | None
     if classifier_settings:
         model_classifier = ModelClassifier(classifier_settings, max_tokens=budgets.classify_out)
         classify_estimator = (
             answer_estimator
-            if classifier_settings.model == answer.model
+            if answer_estimator and classifier_settings.model == answer.model
             else await calibrate(classifier_settings, texts)
         )
         empty = {
@@ -257,7 +271,7 @@ async def _run(
         classifier = await EmbeddingCheck.build(
             dataset.examples, yes=dataset.yes, embed=embed_query, margin=config.classifier.margin
         )
-        classify_estimator, classify_fixed = answer_estimator, 0
+        classify_estimator, classify_fixed = None, 0  # no prompt to measure
 
     pools = _filler_pools(dataset.samples, chunks)
     pipeline = Pipeline(
@@ -268,8 +282,16 @@ async def _run(
         store=store,
         reranker=reranker,
         answer=answer,
-        costs=PromptCosts(classify_fixed, classify_estimator, answer_fixed, answer_estimator),
+        # A classify-only run builds no answer prompt, and the embedding check no prompt at all:
+        # the chunker's fixed estimates stand in for the estimators nothing then uses.
+        costs=PromptCosts(
+            classify_fixed,
+            classify_estimator or CHUNKING,
+            answer_fixed,
+            answer_estimator or CHUNKING,
+        ),
         filler=lambda sample: _rotated(pools.get(sample.language, []), sample),
+        classify_only=classify_only,
     )
 
     idle = Sampler(docker, containers)
@@ -302,14 +324,22 @@ async def _run(
             },
         },
         "calibration": {
-            "answer": {
-                "fixed_tokens": answer_fixed,
-                "chars_per_token": dict(answer_estimator.chars_per_token),
-            },
-            "classifier": {
-                "fixed_tokens": classify_fixed,
-                "chars_per_token": dict(classify_estimator.chars_per_token),
-            },
+            "answer": (
+                {
+                    "fixed_tokens": answer_fixed,
+                    "chars_per_token": dict(answer_estimator.chars_per_token),
+                }
+                if answer_estimator
+                else None
+            ),
+            "classifier": (
+                {
+                    "fixed_tokens": classify_fixed,
+                    "chars_per_token": dict(classify_estimator.chars_per_token),
+                }
+                if classify_estimator
+                else None
+            ),
         },
         "knowledge_base": {
             "documents": len(documents),
@@ -362,6 +392,7 @@ async def _run(
                 "turns": [asdict(record) for record in records],
             }
         )
+        results["scores"] = scores(results["levels"], dataset.samples)
         save(results)  # a failed later level keeps the earlier ones
     return results
 
@@ -402,11 +433,16 @@ def _settings(
 
 
 def _context_windows(
-    answer: ModelSettings, classifier: ModelSettings | None, budgets: Budgets
+    answer: ModelSettings,
+    classifier: ModelSettings | None,
+    budgets: Budgets,
+    *,
+    answers: bool = True,
 ) -> tuple[ModelSettings, ModelSettings | None]:
     """Ollama's context window for each model, large enough for its prompts and replies with a
     tenth to spare. A model that classifies and answers gets one size for both, since Ollama
-    reloads a model when the size changes. Other providers ignore it."""
+    reloads a model when the size changes; in a run that `answers` nothing, the classifier gets
+    its own. Other providers ignore it."""
 
     def window(tokens: int) -> int:
         return math.ceil(tokens * 1.1 / 512) * 512
@@ -415,7 +451,7 @@ def _context_windows(
     if classifier is None:
         return _with_window(answer, answer_window), None
     classify_window = window(budgets.classify_in + budgets.classify_out)
-    if classifier.model == answer.model:
+    if answers and classifier.model == answer.model:
         classify_window = answer_window = max(answer_window, classify_window)
     return _with_window(answer, answer_window), _with_window(classifier, classify_window)
 

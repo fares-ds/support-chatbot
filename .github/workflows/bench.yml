@@ -88,7 +88,13 @@ jobs:
       - name: Run with the embedding check as the classifier
         working-directory: bench
         run: docker compose run --rm bench run configs/ci-embedding.toml
-      - name: Every turn ran, and every level measured the stack
+      - name: Classify only, with a small model
+        working-directory: bench
+        run: docker compose run --rm bench run configs/ci.toml --classify-only --turns 10 --label classify-only
+      - name: Classify only, with the embedding check, over every sample
+        working-directory: bench
+        run: docker compose run --rm bench run configs/ci-embedding.toml --classify-only --label classify-only
+      - name: Every turn ran and was scored, and every level measured the stack
         working-directory: bench
         run: |
           for results in results/*.json; do
@@ -96,6 +102,8 @@ jobs:
               (.levels | length) > 0
               and all(.levels[]; .stats.errors == 0 and .stats.turns > 0
                 and (.resources.memory_peak | has("ollama") and has("tei-embed") and has("tei-rerank")))
+              and .scores.classification.turns == ([.levels[].turns | length] | add)
+              and (.scores.classification.unknown | length) == 0
             ' "$results"
           done
           cat results/*.md >> "$GITHUB_STEP_SUMMARY"
