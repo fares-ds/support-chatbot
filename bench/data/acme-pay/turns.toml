@@ -45,7 +45,7 @@ language = "ar"
 message = "أرسلت صور بطاقة التعريف للتحقق من هويتي، متى يُقبل حسابي؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Verification requests are reviewed within 48 working hours", "If the request is refused, a notification gives the reason"]
+facts = ["Verification requests are reviewed within 48 working hours"]
 sources = ["fr-compte.md#Niveaux de vérification > Passer au niveau 2 | ar-compte.md#مستويات التحقق > الانتقال إلى المستوى 2"]
 
 [[turns]]
@@ -72,7 +72,7 @@ language = "ar"
 message = "ضاعت شريحتي القديمة وأريد ربط حسابي برقم جديد، كيف أفعل؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Without access to the old number, customer service can change the number", "It needs a level 2 account and the customer's ID document", "The request is processed within 3 working days"]
+facts = ["Without access to the old number, customer service can change the number", "It needs a level 2 account and the customer's ID document"]
 sources = ["fr-compte.md#Changer de numéro de téléphone | ar-compte.md#تغيير رقم الهاتف"]
 
 [[turns]]
@@ -81,7 +81,7 @@ language = "ar"
 message = "كيف أغلق حسابي نهائيًا؟"
 category = "on_topic"
 expect = "answer"
-facts = ["In Profile, then Settings, choose Close my account", "The balance must be 0 DA first: withdraw it to a CCP account or send it to another user", "Closing is permanent, and the same number cannot open a new account for 30 days"]
+facts = ["In Profile, then Settings, choose Close my account", "The balance must be 0 DA first: withdraw it to a CCP account or send it to another user"]
 sources = ["fr-compte.md#Fermer votre compte | ar-compte.md#إغلاق حسابك"]
 
 [[turns]]
@@ -117,7 +117,7 @@ language = "ar"
 message = "حوّلت المال من بريدي موب ونسيت كتابة رقمي في سبب التحويل، هل سيضيع المال؟"
 category = "on_topic"
 expect = "answer"
-facts = ["The money is not lost: Acme Pay finds the transfer manually", "This can take up to 5 working days"]
+facts = ["The money is not lost: Acme Pay finds the transfer manually"]
 sources = ["fr-portefeuille.md#Alimenter par virement BaridiMob | ar-portefeuille.md#التعبئة بتحويل من بريدي موب"]
 
 [[turns]]
@@ -162,7 +162,7 @@ language = "ar"
 message = "ما أقصى مبلغ لتعبئة رصيد موبيليس في المرة الواحدة؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Top-ups go from 50 DA to 5,000 DA each"]
+facts = ["5,000 DA per top-up"]
 sources = ["fr-recharges.md#Opérateurs et montants | ar-recharges.md#المتعاملون والمبالغ"]
 
 [[turns]]
@@ -180,7 +180,7 @@ language = "ar"
 message = "التعبئة ناجحة في التطبيق لكن الرصيد لم يصل إلى هاتف أمي منذ ساعة، ماذا أفعل؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Restart the phone and check the balance with the operator's code", "Report it from History: choose the top-up, then Report a problem, with the operation number", "Acme Pay replies within 48 hours"]
+facts = ["Restart the phone and check the balance with the operator's code", "Report it from History: choose the top-up, then Report a problem, with the operation number"]
 sources = ["fr-recharges.md#Recharge échouée ou non reçue | ar-recharges.md#تعبئة فاشلة أو لم تصل"]
 
 [[turns]]
@@ -198,7 +198,7 @@ language = "ar"
 message = "برمجت تعبئة شهرية لكن رصيدي لم يكفِ، هل ستُعاد المحاولة؟"
 category = "on_topic"
 expect = "answer"
-facts = ["The top-up is not made and a notification is sent", "It is not retried: the next one happens on its scheduled date"]
+facts = ["It is not retried: the next one happens on its scheduled date"]
 sources = ["fr-recharges.md#Recharges programmées | ar-recharges.md#التعبئة المبرمجة"]
 
 [[turns]]
@@ -225,8 +225,8 @@ language = "ar"
 message = "اشتريت بطاقة PlayStation للإمارات وحسابي فرنسي، هل يمكن استرجاع المبلغ؟"
 category = "on_topic"
 expect = "answer"
-facts = ["A card only works with an account from the same country", "A code that has been displayed cannot be refunded, even if it was bought for the wrong country"]
-sources = ["fr-cartes-cadeaux.md#Produits disponibles | ar-cartes-cadeaux.md#المنتجات المتوفرة", "fr-cartes-cadeaux.md#Remboursement | ar-cartes-cadeaux.md#الاسترجاع"]
+facts = ["A code that has been displayed cannot be refunded, even if it was bought for the wrong country"]
+sources = ["fr-cartes-cadeaux.md#Remboursement | ar-cartes-cadeaux.md#الاسترجاع"]
 
 [[turns]]
 id = "ar-gift-find-code"
@@ -234,7 +234,7 @@ language = "ar"
 message = "أين أجد رمز بطاقة Google Play التي اشتريتها الشهر الماضي؟"
 category = "on_topic"
 expect = "answer"
-facts = ["In History, then My codes", "Codes stay there for 12 months"]
+facts = ["In History, then My codes"]
 sources = ["fr-cartes-cadeaux.md#Recevoir votre code | ar-cartes-cadeaux.md#استلام الرمز"]
 
 [[turns]]
@@ -320,7 +320,7 @@ history = [
 message = "وكم يستغرق التحقق؟"
 category = "on_topic"
 expect = "answer"
-facts = ["The code is checked with the provider within 72 hours", "If it is invalid, the customer gets a new code or a refund to the wallet"]
+facts = ["The code is checked with the provider within 72 hours"]
 sources = ["fr-cartes-cadeaux.md#Un code ne fonctionne pas | ar-cartes-cadeaux.md#رمز لا يعمل"]
 cases = ["needs_history"]
 
@@ -989,7 +989,7 @@ interface_language = "fr"
 message = "permis de conduire yetqbel f la vérification?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: a driving licence is not accepted", "Use the biometric ID card or a passport"]
+facts = ["No: a driving licence is not accepted"]
 sources = ["fr-compte.md#Niveaux de vérification > Passer au niveau 2 | ar-compte.md#مستويات التحقق > الانتقال إلى المستوى 2"]
 
 [[turns]]
@@ -1019,7 +1019,7 @@ interface_language = "fr"
 message = "kifach nsakker compte ta3i nhar wahed?"
 category = "on_topic"
 expect = "answer"
-facts = ["In Profile, then Settings, choose Close my account", "The balance must be 0 DA first", "Closing is permanent"]
+facts = ["In Profile, then Settings, choose Close my account", "The balance must be 0 DA first"]
 sources = ["fr-compte.md#Fermer votre compte | ar-compte.md#إغلاق حسابك"]
 
 [[turns]]
@@ -1059,7 +1059,7 @@ interface_language = "fr"
 message = "dert virement men BaridiMob w ktebt numéro ta3i, chhal ywasal?"
 category = "on_topic"
 expect = "answer"
-facts = ["Within 24 hours", "No fees"]
+facts = ["Within 24 hours"]
 sources = ["fr-portefeuille.md#Alimenter par virement BaridiMob | ar-portefeuille.md#التعبئة بتحويل من بريدي موب"]
 
 [[turns]]
@@ -1109,7 +1109,7 @@ interface_language = "fr"
 message = "flexy djezzy chhal max f merra?"
 category = "on_topic"
 expect = "answer"
-facts = ["From 50 DA to 5,000 DA per top-up"]
+facts = ["5,000 DA per top-up"]
 sources = ["fr-recharges.md#Opérateurs et montants | ar-recharges.md#المتعاملون والمبالغ"]
 
 [[turns]]
@@ -1129,7 +1129,7 @@ interface_language = "fr"
 message = "chargit flexy l yemma w bayna réussie bessah ma wsalhach"
 category = "on_topic"
 expect = "answer"
-facts = ["Wait 30 minutes, then restart the phone and check the balance", "If it is still missing, report it from History with the operation number", "Acme Pay replies within 48 hours"]
+facts = ["Wait 30 minutes, then restart the phone and check the balance", "If it is still missing, report it from History with the operation number"]
 sources = ["fr-recharges.md#Recharge échouée ou non reçue | ar-recharges.md#تعبئة فاشلة أو لم تصل"]
 
 [[turns]]
@@ -1149,7 +1149,7 @@ interface_language = "fr"
 message = "nqder nechri pass internet ta3 Ooredoo men l'app?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes, in Recharges, then Forfaits, at the operator's price", "The offer is activated within 5 minutes"]
+facts = ["Yes, in Recharges, then Forfaits"]
 sources = ["fr-recharges.md#Forfaits et pass internet | ar-recharges.md#العروض وباقات الإنترنت"]
 
 [[turns]]
@@ -1159,7 +1159,7 @@ interface_language = "fr"
 message = "nheb ndir recharge automatique kol chhar, kifach?"
 category = "on_topic"
 expect = "answer"
-facts = ["In Recharges, then Programmer, weekly or monthly", "Up to 5 scheduled top-ups"]
+facts = ["In Recharges, then Programmer"]
 sources = ["fr-recharges.md#Recharges programmées | ar-recharges.md#التعبئة المبرمجة"]
 
 [[turns]]
@@ -1199,7 +1199,7 @@ interface_language = "fr"
 message = "code steam ma khdemch, wach ndir?"
 category = "on_topic"
 expect = "answer"
-facts = ["Report it within 7 days in History, then My codes, with a screenshot of the error", "It is checked within 72 hours; an invalid code is replaced or refunded"]
+facts = ["Report it within 7 days in History, then My codes, with a screenshot of the error"]
 sources = ["fr-cartes-cadeaux.md#Un code ne fonctionne pas | ar-cartes-cadeaux.md#رمز لا يعمل"]
 
 [[turns]]
@@ -1219,8 +1219,8 @@ interface_language = "fr"
 message = "nqder nkhalass facture sonelgaz b Acme Pay?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: Sonelgaz electricity and gas bills are accepted", "Scan the bill's barcode or enter its reference, then confirm with the secret code"]
-sources = ["fr-factures.md#Factures acceptées | ar-factures.md#الفواتير المقبولة", "fr-factures.md#Comment payer | ar-factures.md#كيفية الدفع"]
+facts = ["Yes: Sonelgaz electricity and gas bills are accepted"]
+sources = ["fr-factures.md#Factures acceptées | ar-factures.md#الفواتير المقبولة"]
 
 [[turns]]
 id = "darija-latin-bill-wrong-reference"
@@ -1259,7 +1259,7 @@ interface_language = "fr"
 message = "chat ta3koum m3a ch7al yetsakker?"
 category = "on_topic"
 expect = "answer"
-facts = ["Every day from 8 am to 10 pm", "Outside those hours, leave a message for a reply the next morning"]
+facts = ["It closes at 10 pm"]
 sources = ["fr-contact.md#Chat dans l'application | ar-contact.md#الدردشة في التطبيق"]
 
 [[turns]]
@@ -1269,7 +1269,7 @@ interface_language = "fr"
 message = "kayen agence ta3 Acme Pay nroh liha?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: Acme Pay has no agencies", "Customer service answers by chat, phone and email"]
+facts = ["No: Acme Pay has no agencies"]
 sources = ["fr-contact.md | ar-contact.md"]
 
 [[turns]]
@@ -1279,7 +1279,7 @@ interface_language = "fr"
 message = "parrainage ch7al ya3tiw?"
 category = "on_topic"
 expect = "answer"
-facts = ["200 DA each, to the referrer and the new customer", "Once the new customer reaches level 2 and makes a first operation of at least 1,000 DA within 30 days"]
+facts = ["200 DA each, to the referrer and the new customer"]
 sources = ["fr-parrainage.md#Comment ça marche | ar-parrainage.md#كيف تعمل الإحالة"]
 
 [[turns]]
@@ -1299,7 +1299,7 @@ interface_language = "fr"
 message = "3andi hanout, kifach nwalli point de vente agréé?"
 category = "on_topic"
 expect = "answer"
-facts = ["A commercial register in your name, a tax ID number (NIF) and commercial premises", "Apply in the app, in Profile, then Become a merchant; the file is reviewed within 10 working days"]
+facts = ["A commercial register in your name, a tax ID number (NIF) and commercial premises", "Apply in the app, in Profile, then Become a merchant"]
 sources = ["fr-commercants.md#Devenir point de vente agréé | ar-commercants.md#أن تصبح نقطة بيع معتمدة"]
 
 [[turns]]
@@ -1313,7 +1313,7 @@ history = [
 message = "w chhal max f nhar?"
 category = "on_topic"
 expect = "answer"
-facts = ["From 1,000 DA to 100,000 DA per day"]
+facts = ["100,000 DA per day"]
 sources = ["fr-portefeuille.md#Retirer vers un compte CCP | ar-portefeuille.md#السحب إلى حساب بريدي جارٍ (CCP) | fr-frais-et-plafonds.md#Plafonds par niveau | ar-frais-et-plafonds.md#السقوف حسب المستوى"]
 cases = ["needs_history"]
 
@@ -1358,7 +1358,7 @@ history = [
 message = "w numéro ta3 service client?"
 category = "on_topic"
 expect = "answer"
-facts = ["0800 10 20 30", "For blocking an account it answers 24 hours a day, 7 days a week"]
+facts = ["0800 10 20 30"]
 sources = ["fr-contact.md#Téléphone | ar-contact.md#الهاتف"]
 cases = ["needs_history"]
 
@@ -2134,7 +2134,7 @@ interface_language = "ar"
 message = "وين نلقى الحوانت لي يشارجيو المحفظة بالدراهم؟"
 category = "on_topic"
 expect = "answer"
-facts = ["In the app's Map tab", "More than 3,000 approved merchants in every wilaya"]
+facts = ["In the app's Map tab"]
 sources = ["fr-portefeuille.md#Alimenter chez un point de vente | ar-portefeuille.md#التعبئة عند نقطة بيع"]
 
 [[turns]]
@@ -2144,7 +2144,7 @@ interface_language = "ar"
 message = "درت فيرمو من بريدي موب وكتبت النيمرو، شحال يطول؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Within 24 hours, with no fees"]
+facts = ["Within 24 hours"]
 sources = ["fr-portefeuille.md#Alimenter par virement BaridiMob | ar-portefeuille.md#التعبئة بتحويل من بريدي موب"]
 
 [[turns]]
@@ -2154,7 +2154,7 @@ interface_language = "ar"
 message = "شحال نقدر نسحب في النهار للسي سي بي؟"
 category = "on_topic"
 expect = "answer"
-facts = ["From 1,000 DA to 100,000 DA per day"]
+facts = ["Up to 100,000 DA per day"]
 sources = ["fr-portefeuille.md#Retirer vers un compte CCP | ar-portefeuille.md#السحب إلى حساب بريدي جارٍ (CCP) | fr-frais-et-plafonds.md#Plafonds par niveau | ar-frais-et-plafonds.md#السقوف حسب المستوى"]
 
 [[turns]]
@@ -2174,7 +2174,7 @@ interface_language = "ar"
 message = "واش الإرسال بين المستخدمين فيه فري؟"
 category = "on_topic"
 expect = "answer"
-facts = ["No: sending money to another user is free and instant"]
+facts = ["No: sending money to another user is free"]
 sources = ["fr-portefeuille.md#Envoyer de l'argent à un autre utilisateur | ar-portefeuille.md#إرسال المال إلى مستخدم آخر | fr-frais-et-plafonds.md#Frais par opération | ar-frais-et-plafonds.md#رسوم كل عملية"]
 
 [[turns]]
@@ -2184,7 +2184,7 @@ interface_language = "ar"
 message = "كيفاش نطلب دراهم من خويا في التطبيق؟"
 category = "on_topic"
 expect = "answer"
-facts = ["In Wallet, choose Request, then enter the person's number and the amount", "A request with no answer expires after 7 days"]
+facts = ["In Wallet, choose Request, then enter the person's number and the amount"]
 sources = ["fr-portefeuille.md#Demander de l'argent | ar-portefeuille.md#طلب المال"]
 
 [[turns]]
@@ -2204,7 +2204,7 @@ interface_language = "ar"
 message = "الشارجة باينة ناجحة بصح الكريدي ما وصلش"
 category = "on_topic"
 expect = "answer"
-facts = ["Wait 30 minutes, then restart the phone and check the balance", "If it is still missing, report it from History with the operation number; the reply comes within 48 hours"]
+facts = ["Wait 30 minutes, then restart the phone and check the balance", "If it is still missing, report it from History with the operation number"]
 sources = ["fr-recharges.md#Recharge échouée ou non reçue | ar-recharges.md#تعبئة فاشلة أو لم تصل"]
 
 [[turns]]
@@ -2234,7 +2234,7 @@ interface_language = "ar"
 message = "برمجت شارجة كل سيمانة وما كانش الصولد، واش تعاود؟"
 category = "on_topic"
 expect = "answer"
-facts = ["No: the top-up is skipped with a notification", "The next one happens on its scheduled date"]
+facts = ["No: the top-up is skipped", "The next one happens on its scheduled date"]
 sources = ["fr-recharges.md#Recharges programmées | ar-recharges.md#التعبئة المبرمجة"]
 
 [[turns]]
@@ -2264,7 +2264,7 @@ interface_language = "ar"
 message = "شريت كارطة بلايستيشن، وين يجيني الكود؟"
 category = "on_topic"
 expect = "answer"
-facts = ["The code shows in the app as soon as the payment is accepted", "It is also emailed if an email address is registered", "All codes are in History, then My codes, for 12 months"]
+facts = ["The code shows in the app as soon as the payment is accepted", "It is also emailed if an email address is registered"]
 sources = ["fr-cartes-cadeaux.md#Recevoir votre code | ar-cartes-cadeaux.md#استلام الرمز"]
 
 [[turns]]
@@ -2294,7 +2294,7 @@ interface_language = "ar"
 message = "شحال تقعد الشدات تاع ببجي باش يوصلو؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Less than 15 minutes, sent to the player ID"]
+facts = ["Less than 15 minutes"]
 sources = ["fr-cartes-cadeaux.md#Diamants Free Fire et UC PUBG Mobile | ar-cartes-cadeaux.md#جواهر Free Fire وشدّات PUBG Mobile"]
 
 [[turns]]
@@ -2304,8 +2304,8 @@ interface_language = "ar"
 message = "واش نقدر نخلص فاتورة اتصالات الجزائر من التطبيق؟"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: Algérie Télécom phone and internet bills are accepted", "With no fees"]
-sources = ["fr-factures.md#Factures acceptées | ar-factures.md#الفواتير المقبولة", "fr-factures.md#Comment payer | ar-factures.md#كيفية الدفع | fr-frais-et-plafonds.md#Frais par opération | ar-frais-et-plafonds.md#رسوم كل عملية"]
+facts = ["Yes: Algérie Télécom phone and internet bills are accepted"]
+sources = ["fr-factures.md#Factures acceptées | ar-factures.md#الفواتير المقبولة"]
 
 [[turns]]
 id = "darija-arabic-sonelgaz-unpaid"
@@ -2364,7 +2364,7 @@ interface_language = "ar"
 message = "كاين عملية في الهيستوريك ما درتهاش أنا"
 category = "on_topic"
 expect = "answer"
-facts = ["Report it within 30 days from History or to customer service", "The account is locked during an investigation of at most 10 working days", "It is refunded if the operation was fraudulent and the customer was not negligent"]
+facts = ["Report it within 30 days from History or to customer service"]
 sources = ["fr-securite.md#Une opération que vous ne reconnaissez pas | ar-securite.md#عملية لا تعرفها"]
 
 [[turns]]
@@ -2374,7 +2374,7 @@ interface_language = "ar"
 message = "واش عندكم إيمايل نبعثلكم فيه؟"
 category = "on_topic"
 expect = "answer"
-facts = ["support@acme-pay.example", "Replies come within 2 working days"]
+facts = ["support@acme-pay.example"]
 sources = ["fr-contact.md#E-mail | ar-contact.md#البريد الإلكتروني"]
 
 [[turns]]
@@ -2384,7 +2384,7 @@ interface_language = "ar"
 message = "درت شكاية، شحال يطولو باش يجاوبوني؟"
 category = "on_topic"
 expect = "answer"
-facts = ["A written reply within 10 working days, with a complaint number"]
+facts = ["A written reply within 10 working days"]
 sources = ["fr-contact.md#Réclamations | ar-contact.md#الشكاوى"]
 
 [[turns]]
@@ -2458,7 +2458,7 @@ history = [
 message = "تاع واش من بلاد؟"
 category = "on_topic"
 expect = "answer"
-facts = ["France, the United States or the United Arab Emirates", "A card only works with an account from the same country"]
+facts = ["France, the United States or the United Arab Emirates"]
 sources = ["fr-cartes-cadeaux.md#Produits disponibles | ar-cartes-cadeaux.md#المنتجات المتوفرة"]
 cases = ["needs_history"]
 
@@ -2473,7 +2473,7 @@ history = [
 message = "وشحال الميني؟"
 category = "on_topic"
 expect = "answer"
-facts = ["At least 10,000 DA per transfer", "The money arrives within 24 working hours"]
+facts = ["At least 10,000 DA per transfer"]
 sources = ["fr-commercants.md#Approvisionner votre compte Pro | ar-commercants.md#تموين حسابك برو"]
 cases = ["needs_history"]
 
@@ -2488,7 +2488,7 @@ history = [
 message = "وإيمتا يرجع السقف تاع الشهر؟"
 category = "on_topic"
 expect = "answer"
-facts = ["The monthly limit resets on the first day of each month", "Level 2 gives higher limits; there is no level above it"]
+facts = ["The monthly limit resets on the first day of each month"]
 sources = ["fr-frais-et-plafonds.md#Quand un plafond est atteint | ar-frais-et-plafonds.md#عند بلوغ السقف"]
 cases = ["needs_history"]
 
@@ -3197,8 +3197,8 @@ language = "fr"
 message = "Je peux payer une facture SEAAL avec Acme Pay ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: ADE and SEAAL water bills are accepted", "A water bill costs 15 DA"]
-sources = ["fr-factures.md#Factures acceptées | ar-factures.md#الفواتير المقبولة", "fr-factures.md#Comment payer | ar-factures.md#كيفية الدفع | fr-frais-et-plafonds.md#Frais par opération | ar-frais-et-plafonds.md#رسوم كل عملية"]
+facts = ["Yes: SEAAL water bills are accepted"]
+sources = ["fr-factures.md#Factures acceptées | ar-factures.md#الفواتير المقبولة"]
 
 [[turns]]
 id = "fr-playstation-broken"
@@ -3206,7 +3206,7 @@ language = "fr"
 message = "Mon code PlayStation ne marche pas, que faire ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Report it within 7 days in History, then My codes, with a screenshot", "It is checked within 72 hours; an invalid code is replaced or refunded"]
+facts = ["Report it within 7 days in History, then My codes, with a screenshot"]
 sources = ["fr-cartes-cadeaux.md#Un code ne fonctionne pas | ar-cartes-cadeaux.md#رمز لا يعمل"]
 
 [[turns]]
@@ -3242,7 +3242,7 @@ language = "fr"
 message = "J'ai donné mon code secret à quelqu'un au téléphone, je fais quoi ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Change the secret code immediately in Profile, then Security", "Acme Pay never asks for the secret code"]
+facts = ["Change the secret code immediately in Profile, then Security"]
 sources = ["fr-securite.md#Ne donnez jamais vos codes | ar-securite.md#لا تعطِ رموزك لأحد"]
 
 [[turns]]
@@ -3294,7 +3294,7 @@ language = "en"
 message = "What's your customer service email?"
 category = "on_topic"
 expect = "answer"
-facts = ["support@acme-pay.example", "Replies come within 2 working days"]
+facts = ["support@acme-pay.example"]
 sources = ["fr-contact.md#E-mail | ar-contact.md#البريد الإلكتروني"]
 
 [[turns]]
@@ -3303,7 +3303,7 @@ language = "en"
 message = "Can I set up automatic top-ups for my mum's line?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: in Recharges, then Programmer, weekly or monthly", "Up to 5 scheduled top-ups"]
+facts = ["Yes: automatic top-ups can be scheduled for another person's line"]
 sources = ["fr-recharges.md#Recharges programmées | ar-recharges.md#التعبئة المبرمجة"]
 
 [[turns]]

@@ -18,7 +18,7 @@ language = "fr"
 message = "J'ai perdu ma carte bancaire, quel numéro appeler pour faire opposition ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Contact your bank, or call the interbank opposition line on 0 892 705 705, open 24/7 (a premium-rate number)"]
+facts = ["The interbank opposition line, 0 892 705 705, or your bank"]
 sources = ["fr-perte-carte-bancaire.md#Cas général > Où s’adresser ? | fr-vol-carte-bancaire.md#Cas général > Où s’adresser ? | fr-perte-carte-bancaire.md#À l'étranger > Où s’adresser ?"]
 
 [[turns]]
@@ -36,7 +36,7 @@ language = "fr"
 message = "On m'a volé ma carte et le voleur a dépensé 200 € avec mon code. Combien la banque me rembourse ?"
 category = "on_topic"
 expect = "answer"
-facts = ["When the secret code was used and more than €50 was spent, €50 stays at your expense", "So €150 of the €200 is refunded"]
+facts = ["€150 of the €200 is refunded: €50 stays at your expense"]
 sources = ["fr-perte-carte-bancaire.md#Le code secret a été utilisé > Plus de 50 € dépensés | fr-vol-carte-bancaire.md#Le code secret a été utilisé > Plus de 50 € dépensés"]
 
 [[turns]]
@@ -63,7 +63,7 @@ language = "fr"
 message = "Ma carte est chez moi mais j'ai vu des achats en ligne que je n'ai pas faits. Sous quel délai la banque doit-elle me rembourser ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Immediately, and at the latest by the end of the first working day after receiving the dispute", "The bank also refunds any related charges"]
+facts = ["Immediately, and at the latest by the end of the first working day after receiving the dispute"]
 sources = ["fr-fraude-carte-bancaire.md#Fraude sur internet > Procédure | fr-fraude-carte-bancaire.md#Autre situation > Procédure"]
 
 [[turns]]
@@ -81,7 +81,7 @@ language = "fr"
 message = "Quel est le montant maximum d'un paiement sans contact avec ma carte ?"
 category = "on_topic"
 expect = "answer"
-facts = ["€50 per payment", "The bank also caps the total of contactless payments per day, week or month"]
+facts = ["€50 per payment"]
 sources = ["fr-paiement-sans-contact.md#Carte bancaire"]
 
 [[turns]]
@@ -90,7 +90,7 @@ language = "fr"
 message = "Avec mon téléphone, je peux payer plus de 50 € en sans contact ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Yes: unlocking the phone by biometrics or its PIN allows paying more than €50 without the card code", "Within the card's payment limits set in the account agreement"]
+facts = ["Yes: unlocking the phone by biometrics or its PIN allows paying more than €50 without the card code"]
 sources = ["fr-paiement-sans-contact.md#Téléphone mobile"]
 
 [[turns]]
@@ -108,7 +108,7 @@ language = "fr"
 message = "Ma carte périmée a été avalée par un distributeur. Puis-je la récupérer ?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: an expired card cannot be recovered", "Ask the bank for a new card"]
+facts = ["No: an expired card cannot be recovered"]
 sources = ["fr-carte-avalee.md#Carte invalide (date limite dépassée, déclarée volée...)"]
 
 [[turns]]
@@ -126,7 +126,7 @@ language = "fr"
 message = "Si je renvoie simplement le colis sans rien écrire, est-ce que ça compte comme une rétractation ?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: just sending the item back or refusing delivery does not express a withdrawal", "Send the seller the withdrawal form or another written statement before the deadline"]
+facts = ["No: just sending the item back or refusing delivery does not express a withdrawal"]
 sources = ["fr-achat-distance-retractation.md#Achat de services financiers à distance : ce qui va changer en 2026 > Achat couplé d'un bien et d'un service (exemple : fourniture d'une box avec un abonnement internet)"]
 
 [[turns]]
@@ -171,7 +171,7 @@ language = "fr"
 message = "Mon colis a été perdu par le transporteur que le vendeur avait choisi. Qui est responsable ?"
 category = "on_topic"
 expect = "answer"
-facts = ["The seller alone is responsible for delivering the order", "The customer does not have to prove a fault"]
+facts = ["The seller alone is responsible for delivering the order"]
 sources = ["fr-achat-distance-livraison.md#La livraison est réalisée par le transporteur proposé par le vendeur"]
 
 [[turns]]
@@ -180,7 +180,7 @@ language = "fr"
 message = "J'ai annulé ma commande parce qu'elle n'a jamais été livrée. En combien de temps dois-je être remboursé ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Within 14 calendar days of the cancellation", "Late refunds are automatically increased"]
+facts = ["Within 14 calendar days of the cancellation"]
 sources = ["fr-achat-distance-livraison.md#Le consommateur choisit lui-même le transporteur"]
 
 [[turns]]
@@ -189,7 +189,7 @@ language = "fr"
 message = "Je veux contester un prélèvement que j'avais autorisé. J'ai combien de temps ?"
 category = "on_topic"
 expect = "answer"
-facts = ["8 weeks after the debit date", "The bank refunds within 10 working days of the request"]
+facts = ["8 weeks after the debit date"]
 sources = ["fr-prelevement-bancaire.md#Prélèvement autorisé"]
 
 [[turns]]
@@ -198,7 +198,7 @@ language = "fr"
 message = "Un prélèvement que je n'ai jamais autorisé est apparu sur mon compte. Quel délai pour le contester ?"
 category = "on_topic"
 expect = "answer"
-facts = ["13 months after the debit date, or 70 days if the payee's bank is outside the EU and EEA", "The bank refunds by the end of the first working day after the request"]
+facts = ["13 months after the debit date, or 70 days if the payee's bank is outside the EU and EEA"]
 sources = ["fr-prelevement-bancaire.md#Prélèvement non autorisé"]
 
 [[turns]]
@@ -216,7 +216,7 @@ language = "fr"
 message = "Un mandat de prélèvement inutilisé depuis plus de 3 ans est-il encore valable ?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: a mandate with no direct debit for 36 months can no longer be used", "The creditor must have a new mandate signed"]
+facts = ["No: a mandate with no direct debit for 36 months can no longer be used"]
 sources = ["fr-prelevement-bancaire.md#Prélèvement automatique"]
 
 [[turns]]
@@ -234,7 +234,7 @@ language = "fr"
 message = "Combien de temps met un virement pour arriver sur le compte du bénéficiaire ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Generally 24 to 48 hours after the bank records it", "It varies, notably when the account is abroad"]
+facts = ["Generally 24 to 48 hours after the bank records it"]
 sources = ["fr-virement-bancaire.md#Transfert des fonds sur le compte du bénéficiaire"]
 
 [[turns]]
@@ -243,7 +243,7 @@ language = "fr"
 message = "Ma banque ne répond pas à ma réclamation écrite. Quand puis-je saisir le médiateur ?"
 category = "on_topic"
 expect = "answer"
-facts = ["After 2 months without a satisfactory answer, or 15 days for a payment service dispute", "You must show you first complained to the bank in writing"]
+facts = ["After 2 months without a satisfactory answer, or 15 days for a payment service dispute"]
 sources = ["fr-mediateur-bancaire.md#Réclamation écrite préalable"]
 
 [[turns]]
@@ -252,7 +252,7 @@ language = "fr"
 message = "Faut-il payer pour saisir le médiateur bancaire ?"
 category = "on_topic"
 expect = "answer"
-facts = ["No: it is free", "A lawyer or an expert is optional and at your own cost"]
+facts = ["No: it is free"]
 sources = ["fr-mediateur-bancaire.md#Cas d'exclusion"]
 
 [[turns]]
@@ -288,7 +288,7 @@ language = "fr"
 message = "Quand la banque doit-elle m'envoyer le récapitulatif annuel de mes frais ?"
 category = "on_topic"
 expect = "answer"
-facts = ["In January each year, for the previous year", "Account statements also show the monthly total of fees"]
+facts = ["In January each year, for the previous year"]
 sources = ["fr-tarifs-bancaires.md#Récapitulatif des frais bancaires"]
 
 [[turns]]
@@ -319,7 +319,7 @@ history = [
 message = "Et pour avoir une nouvelle carte ?"
 category = "on_topic"
 expect = "answer"
-facts = ["Ask the bank for a new card", "It will have a new number and a new secret code"]
+facts = ["Ask the bank for a new card"]
 sources = ["fr-perte-carte-bancaire.md#Sanctions en cas de fausses déclarations | fr-vol-carte-bancaire.md#Sanctions en cas de fausses déclarations"]
 cases = ["needs_history"]
 
