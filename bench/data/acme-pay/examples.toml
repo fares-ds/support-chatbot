@@ -2,7 +2,7 @@
 # category of its most similar phrase. They are what the check learns from, so none may repeat a
 # turn's message; the loader refuses a dataset where one does.
 
-yes = ["yes", "yeah", "yep", "sure", "ok", "okay", "please", "oui", "ouais", "d'accord", "volontiers", "نعم", "أجل", "حسنا", "حسنًا", "طيب", "ah", "wah", "iyeh", "ih", "ewa", "واه", "إيه", "اه", "ايه", "أوكي"]
+yes = ["yes", "yeah", "yep", "sure", "ok", "okay", "please", "oui", "ouais", "d'accord", "volontiers", "نعم", "أجل", "حسنا", "حسنًا", "طيب", "ah", "wah", "iyeh", "ih", "ayeh", "واه", "إيه", "اه", "ايه", "أوكي"]
 
 [examples]
 on_topic = [
@@ -45,7 +45,7 @@ human_request = [
     "أريد التواصل مع شخص من خدمة العملاء",
     "nheb nahder m3a wahed mel équipe",
     "a3tini conseiller",
-    "بغيت نتكلم مع واحد من الخدمة",
+    "حبيت نهدر مع واحد من الخدمة",
     "عيطلي لواحد من السيرفيس",
 ]
 smalltalk = [
