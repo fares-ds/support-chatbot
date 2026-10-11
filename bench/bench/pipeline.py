@@ -135,7 +135,10 @@ class Pipeline:
                 fixed_tokens=self._costs.answer_fixed,
             )
             record.estimated_tokens["answer_in"] = prompt.tokens
-            record.prompt_chunks = [self._retrieved(c) for c in ranked[: len(prompt.sources)]]
+            record.prompt_chunks = [
+                self._retrieved(candidate) | {"chars": len(source.text)}
+                for candidate, source in zip(ranked, prompt.sources, strict=False)
+            ]
             record.sources = [
                 f"{c.title} > {c.heading_path}" if c.heading_path else c.title
                 for c in ranked[: len(prompt.sources)]

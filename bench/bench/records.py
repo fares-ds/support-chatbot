@@ -56,4 +56,5 @@ class TurnRecord:
     path of every section it holds text from, for recall@5."""
     prompt_chunks: list[dict[str, Any]] = field(default_factory=list)
     """The answer prompt's sources as `retrieved` records chunks: the reranker's best that fit
-    the sources budget, up to its max_sources."""
+    the sources budget, up to its max_sources. Each also has `chars`, how much of its text the
+    prompt kept: the last may be cut to fit."""

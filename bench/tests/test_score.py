@@ -1,7 +1,15 @@
 from typing import Any
 
 from bench.data import ExpectedSource, Sample, Section
-from bench.score import GATES, classification_scores, classify_latency, retrieval_scores, scores
+from bench.score import (
+    GATES,
+    answer_scores,
+    citations,
+    classification_scores,
+    classify_latency,
+    retrieval_scores,
+    scores,
+)
 
 
 def sample(
@@ -329,3 +337,178 @@ def test_a_run_that_built_no_answer_prompt_has_nothing_in_the_prompt() -> None:
     scores = recall([retrieve_only], [question("q", source("plans.md#Prices"))], prompts=False)
 
     assert (scores["recall"]["all"], scores["in_prompt"]) == ([1, 1], {})
+
+
+def answered(
+    id: str, answer: str = "It costs 10 DA [1].", *chunks: dict[str, Any], outcome: str = "answered"
+) -> dict[str, Any]:
+    """A full turn: its answer, and the chunks its prompt took, numbered from 1."""
+    return {
+        "sample": id,
+        "category": "on_topic",
+        "outcome": outcome,
+        "steps": {"classify": 0.1, "rerank": 0.2, "answer": 1.0},
+        "retrieved": list(chunks),
+        "prompt_chunks": list(chunks),
+        "answer": answer if outcome == "answered" else "",
+    }
+
+
+def judged(*facts: str, claims: tuple[str, ...] = (), language: str = "en") -> dict[str, Any]:
+    """A judgment: a verdict per expected fact, the unsupported claims, the reply's language."""
+    return {
+        "facts": [{"number": n, "verdict": v, "quote": ""} for n, v in enumerate(facts, 1)],
+        "unsupported_claims": list(claims),
+        "language": language,
+    }
+
+
+def handoff(id: str) -> Sample:
+    return sample(id, "on_topic", expect="handoff")
+
+
+PRICES = chunk("plans.md", "Prices")
+
+
+def test_an_answer_is_correct_when_it_states_every_fact_and_contradicts_none() -> None:
+    samples = [question(f"q{n}", source("plans.md#Prices")) for n in range(3)]
+    turns = [answered(f"q{n}", "It costs 10 DA [1].", PRICES) for n in range(3)]
+    judgments = {
+        "q0": judged("stated"),
+        "q1": judged("missing"),
+        "q2": judged("contradicted"),
+    }
+
+    scores = answer_scores(turns, samples, judgments)
+
+    assert scores["gates"]["correct"]["all"] == [1, 3]
+
+
+def test_an_abstain_on_an_answerable_question_is_not_correct() -> None:
+    samples = [question("q", source("plans.md#Prices"))]
+
+    scores = answer_scores([answered("q", outcome="abstained")], samples, {})
+
+    assert (scores["gates"]["correct"]["all"], scores["abstained"]["all"]) == ([0, 1], [1, 1])
+
+
+def test_an_unanswerable_question_answered_counts_against_its_gate_without_a_judge() -> None:
+    samples = [handoff("h1"), handoff("h2")]
+    turns = [answered("h1", "Yes, you can."), answered("h2", outcome="abstained")]
+
+    scores = answer_scores(turns, samples, None)
+
+    assert scores["gates"]["unanswerable_answered"]["all"] == [1, 2]
+    assert "correct" not in scores["gates"]  # it takes a judge
+
+
+def test_unsupported_claims_are_counted_over_every_judged_answer() -> None:
+    samples = [question("q", source("plans.md#Prices")), handoff("h")]
+    turns = [answered("q", "10 DA [1].", PRICES), answered("h", "Yes, it works in Tunisia.")]
+    judgments = {"q": judged("stated"), "h": judged(claims=("It works in Tunisia",))}
+
+    scores = answer_scores(turns, samples, judgments)
+
+    assert scores["gates"]["unsupported"]["all"] == [1, 2]
+
+
+def test_citations_are_checked_against_the_prompts_sources() -> None:
+    samples = [question(f"q{n}", source("plans.md#Prices")) for n in range(3)]
+    other = chunk("plans.md", "Changes")
+    turns = [
+        answered("q0", "10 DA [2].", other, PRICES),  # cites the source that holds the facts
+        answered("q1", "10 DA [1].", other, PRICES),  # cites another
+        answered("q2", "10 DA [1, 3].", PRICES),  # [3] is no source
+    ]
+
+    scores = answer_scores(turns, samples, None)
+
+    assert scores["cites_expected"]["all"] == [2, 3]
+    assert scores["bad_citations"]["all"] == [1, 3]
+
+
+def test_the_reply_languages_are_counted_per_group() -> None:
+    samples = [
+        question("dz", source("plans.md#Prices"), language="darija"),
+        question("dz-2", source("plans.md#Prices"), language="darija"),
+    ]
+    turns = [answered("dz", "", PRICES), answered("dz-2", "", PRICES)]
+    judgments = {"dz": judged("stated", language="ar"), "dz-2": judged("stated", language="darija")}
+
+    scores = answer_scores(turns, samples, judgments)
+
+    assert scores["languages"]["darija-latin"] == {"ar": 1, "darija": 1}
+
+
+def test_an_answer_the_judge_could_not_judge_is_left_out_of_the_judges_gates() -> None:
+    samples = [question("q1", source("plans.md#Prices")), question("q2", source("plans.md#Prices"))]
+    turns = [answered("q1", "10 DA [1].", PRICES), answered("q2", "10 DA [1].", PRICES)]
+
+    scores = answer_scores(turns, samples, {"q1": judged("stated")})
+
+    assert scores["gates"]["correct"]["all"] == [1, 1]
+    assert scores["unjudged"]["all"] == [1, 2]
+
+
+def test_a_failed_turn_on_an_unanswerable_question_counts_against_its_gate() -> None:
+    scores = answer_scores([answered("h", outcome="error")], [handoff("h")], None)
+
+    assert scores["gates"]["unanswerable_answered"]["all"] == [1, 1]
+
+
+def test_a_verdict_for_facts_the_sample_no_longer_has_is_left_out() -> None:
+    samples = [question("q", source("plans.md#Prices"))]  # one expected fact
+    turns = [answered("q", "10 DA [1].", PRICES)]
+
+    scores = answer_scores(turns, samples, {"q": judged("stated", "stated")})
+
+    assert (scores["gates"]["correct"], scores["unjudged"]["all"]) == ({}, [1, 1])
+
+
+def test_citations_are_read_in_the_forms_answers_write_them() -> None:
+    assert citations("10 DA [1, 2], [3] and [1، 4] [source 6]") == [1, 2, 3, 1, 4, 6]
+    assert citations('48 hours [المصدر: "Votre compte"]') == []
+
+
+def test_answers_citing_nothing_by_number_are_counted() -> None:
+    samples = [question("q1", source("plans.md#Prices")), question("q2", source("plans.md#Prices"))]
+    turns = [
+        answered("q1", "10 DA [1].", PRICES),
+        answered("q2", '10 DA [المصدر: "Plans"].', PRICES),
+    ]
+
+    assert answer_scores(turns, samples, None)["cites_none"]["all"] == [1, 2]
+
+
+def test_an_answer_stating_some_facts_and_contradicting_none_is_partly_correct() -> None:
+    samples = [
+        sample(f"q{n}", "on_topic", facts=("a", "b"), sources=(source("plans.md#Prices"),))
+        for n in range(3)
+    ]
+    turns = [answered(f"q{n}", "10 DA [1].", PRICES) for n in range(3)]
+    judgments = {
+        "q0": judged("stated", "missing"),  # partly correct
+        "q1": judged("stated", "contradicted"),  # wrong
+        "q2": judged("stated", "stated"),  # correct
+    }
+
+    scores = answer_scores(turns, samples, judgments)
+
+    assert (scores["gates"]["correct"]["all"], scores["partly_correct"]["all"]) == ([1, 3], [1, 3])
+
+
+def test_a_darija_message_may_be_answered_in_darija_or_modern_standard_arabic() -> None:
+    samples = [
+        question(f"dz{n}", source("plans.md#Prices"), language="darija") for n in range(3)
+    ] + [question("fr", source("plans.md#Prices"), language="fr")]
+    turns = [answered(s.id, "10 DA [1].", PRICES) for s in samples]
+    judgments = {
+        "dz0": judged("stated", language="darija"),
+        "dz1": judged("stated", language="ar"),
+        "dz2": judged("stated", language="fr"),
+        "fr": judged("stated", language="fr"),
+    }
+
+    scores = answer_scores(turns, samples, judgments)
+
+    assert scores["right_language"] == {"fr": [1, 1], "darija-latin": [2, 3], "all": [3, 4]}

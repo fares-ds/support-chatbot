@@ -38,6 +38,7 @@ docker compose run --rm bench run configs/dev.toml --dataset data/gov-uk
 docker compose run --rm bench run configs/dev.toml --concurrency 1,2,4 --turns 20 --label quiet-hour
 docker compose run --rm bench run configs/dev-embedding.toml --classify-only
 docker compose run --rm bench run configs/dev-embedding.toml --retrieve-only
+docker compose run --rm bench judge results/A.json
 docker compose run --rm bench score results/A.json
 docker compose run --rm bench compare results/A.json results/B.json
 ```
@@ -118,7 +119,7 @@ Each run writes two files to `results/`, which git ignores; commit a run only on
   - every turn, with its timings, tokens, category, search query, the reranker's top 5 chunks, the prompt's sources, and the answer;
   - the scores (below).
 
-  A later scorer can judge the answers from it (#15).
+  `judge` adds its verdicts on the answers (below).
 - **`<time>-<name>.md`** is the summary:
   - Gate 1's scores against the release gates (below);
   - p50 and p95 per step;
@@ -154,9 +155,31 @@ A run whose turns searched also scores retrieval, over each answerable question'
 
 A turn that failed before the rerank found nothing. The knowledge bases are small, at 29 to 202 chunks, so recall reads higher than it would over an install's thousands; comparisons between pairings still hold.
 
+### Answers
+
+A run that answered scores Gate 3, over each on-topic question's first turn, per group and pooled. Code checks what it can by itself:
+
+- **Unanswerable questions answered instead of handed off** (≤ 10%): the answer model gave an answer where it should have abstained. A turn that failed counts against it too, as it handed nothing off.
+- **Answerable questions abstained on.**
+- **Citations:** answers citing a source that holds the expected facts, and answers citing a number the prompt had no source for.
+
+**`bench judge results/A.json`** adds what takes reading. A judge model reads each answer beside what the answer model was given, and the facts a correct answer states. That is the business's description and the prompt's sources, rebuilt from the dataset, with the last one cut where the prompt cut it. It gives:
+
+- a verdict on each expected fact: stated, contradicted or missing;
+- the claims no source supports;
+- the reply's language: en, fr, ar (Modern Standard Arabic), darija, or other.
+
+Those give two more gates: **answer correctness** (≥ 85%), where every fact is stated and none contradicted, and **answers with unsupported claims** (≤ 3%). The summary also scores **replies in the customer's language**, where a Darija message takes Darija or Modern Standard Arabic, in Arabic script ([ADR-0035](../docs/adr/0035-darija-replies-in-arabic-script.md)), and counts the replies' languages per group. It is a score, not a release gate.
+
+- **The judge** defaults to `gpt-oss:120b` on Ollama's cloud, from another family than the development answer model. Pick another with `--judge`, any LiteLLM model. Send a cloud judge only synthetic or public data, such as `data/`.
+- **Output:** the judge's output is bound to a schema, with one retry after an error or a bad reply, as Gate 1's is. An answer it still fails on is named in the results, and left out of the judge's gates. If it fails on every answer, the results stay as they were.
+- **Where the verdicts go:** into the results file, with the judge and the date, and the summary is written again.
+- **A changed dataset:** `judge` refuses a run whose dataset's knowledge base has changed since, as the judge would then see other sources than the answer model did.
+- **Judge it again:** run `judge` again, with the same judge or another, to replace the verdicts. Do so after a review changes a sample's facts: `score` leaves out a verdict whose facts no longer match the sample's.
+
 ### Scoring again
 
-`score` scores a saved run again against the dataset's current labels, for instance after a review corrects a category. Turns whose samples the dataset no longer has are left out and named.
+`score` scores a saved run again against the dataset's current labels, with its judge's verdicts if any, for instance after a review corrects a category. Turns whose samples the dataset no longer has are left out and named.
 
 `compare` prints several runs side by side, matched by concurrency level, with Gate 1's rates and recall@5 per group for runs that have scores. It leaves out rows that no run has. `METHOD_VERSION` in `bench/__init__.py` changes when results stop being comparable with earlier ones.
 
