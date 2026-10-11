@@ -69,7 +69,7 @@ def test_requests_for_a_person_are_scored_per_group_and_pooled() -> None:
     samples = [
         sample("en-person", "human_request"),
         sample("dz-person-1", "human_request", language="darija", message="nheb nahder m3a wahed"),
-        sample("dz-person-2", "human_request", language="darija", message="bghit conseiller"),
+        sample("dz-person-2", "human_request", language="darija", message="nheb conseiller"),
     ]
     turns = [
         turn("en-person", "human_request"),

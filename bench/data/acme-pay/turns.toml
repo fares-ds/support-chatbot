@@ -1016,7 +1016,7 @@ sources = ["fr-compte.md#Changer de numéro de téléphone | ar-compte.md#تغي
 id = "darija-latin-close"
 language = "darija"
 interface_language = "fr"
-message = "kifach nsakker le compte ta3i nhaïyan?"
+message = "kifach nsakker le compte ta3i nhaiyan?"
 category = "on_topic"
 expect = "answer"
 facts = ["In Profile, then Settings, choose Close my account", "The balance must be 0 DA first"]
@@ -1791,7 +1791,7 @@ category = "human_request"
 id = "darija-latin-person-21"
 language = "darija"
 interface_language = "fr"
-message = "rani m9ale9, nheb nahder m3a bnadem"
+message = "rani m9ale9, 7ab nahder m3a bnadem"
 category = "human_request"
 
 [[turns]]
@@ -2607,7 +2607,7 @@ category = "off_topic"
 id = "darija-arabic-off-04"
 language = "darija"
 interface_language = "ar"
-message = "كيفاش راح يكون الجو غدوة في قسنطينة؟"
+message = "واش راح يكون الجو غدوة في قسنطينة؟"
 category = "off_topic"
 
 [[turns]]
@@ -2815,7 +2815,7 @@ category = "human_request"
 id = "darija-arabic-person-08"
 language = "darija"
 interface_language = "ar"
-message = "عيطلي للمسؤول"
+message = "حبيت المسؤول"
 category = "human_request"
 
 [[turns]]
@@ -2998,7 +2998,7 @@ history = [
     { role = "ai", text = "لم أجد إجابة عن هذا في مقالات المساعدة. هل تريد أن أحوّلك إلى أحد أعضاء فريقنا؟" },
 ]
 offered_person = true
-message = "إيه، يعطيك الصحة"
+message = "إيه أكيد"
 category = "human_request"
 cases = ["yes_after_offer"]
 
