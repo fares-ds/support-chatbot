@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bench.data import ExpectedSource, Section, load_turns
+from bench.data import ExpectedSource, Sample, Section, load_turns, select_samples
 
 BUSINESS = """
 [business]
@@ -130,3 +130,22 @@ def test_darija_is_reported_by_script(
     [sample] = load_turns(path).samples
 
     assert sample.group == group
+
+
+def test_a_run_can_take_only_the_on_topic_or_the_answerable_samples() -> None:
+    samples = [
+        Sample("q", "en", "en", "How much?", expect="answer", facts=("x",)),
+        Sample("h", "en", "en", "Do you sell cars?", expect="handoff"),
+        Sample("poem", "en", "en", "Write me a poem", category="off_topic"),
+    ]
+
+    assert [s.id for s in select_samples(samples, "all")] == ["q", "h", "poem"]
+    assert [s.id for s in select_samples(samples, "on-topic")] == ["q", "h"]
+    assert [s.id for s in select_samples(samples, "answerable")] == ["q"]
+
+
+def test_a_run_refuses_a_sample_set_the_dataset_has_none_of() -> None:
+    samples = [Sample("poem", "en", "en", "Write me a poem", category="off_topic")]
+
+    with pytest.raises(ValueError, match="no answerable samples"):
+        select_samples(samples, "answerable")

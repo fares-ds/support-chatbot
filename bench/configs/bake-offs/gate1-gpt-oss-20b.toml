@@ -1,0 +1,18 @@
+# The classifier bake-off (#14), in Ollama's cloud: Fares keeps this Mac's RAM free, so no
+# local model runs here (2026-10-11). Accuracy only: cloud latency says nothing about an
+# install, and the CPU candidates run on the VPS (#17). Run with --classify-only.
+
+name = "gate1-gpt-oss-20b"
+
+[classifier]
+mode = "model"
+model = "ollama_chat/gpt-oss:20b-cloud"
+reasoning_effort = "low"              # gpt-oss cannot turn reasoning off
+
+[answer]                              # unused with --classify-only
+model = "ollama_chat/gemma4:cloud"
+reasoning_effort = "none"
+
+[run]
+concurrency = [4]
+warmup = 2

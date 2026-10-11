@@ -284,3 +284,10 @@ def test_the_summary_scores_judged_answers_against_gate_3s_gates() -> None:
     )
     comparison = compare_markdown([run | {"scores": run_scores}])
     assert "| Answer correctness, answerable questions · All | 50.0% (1/2) |" in comparison
+
+
+def test_a_run_of_some_samples_says_so_wherever_it_is_named() -> None:
+    run = results([level(1, [record()])]) | {"sample_set": "answerable"}
+
+    assert "dev [answerable], 2026-10-07 12:00" in compare_markdown([run])
+    assert "dev [answerable]" in summary_markdown(run)

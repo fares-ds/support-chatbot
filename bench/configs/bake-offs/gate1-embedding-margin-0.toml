@@ -1,0 +1,17 @@
+# The classifier bake-off (#14): the embedding check without ADR-0025's on_topic bias, to see how
+# much of its off-topic miss the 0.05 margin causes. Run with --classify-only, on the TEI
+# embedding model to test.
+
+name = "gate1-embedding-margin-0"
+
+[classifier]
+mode = "embedding"
+margin = 0.0
+
+[answer]                              # unused with --classify-only
+model = "ollama_chat/gemma4:cloud"
+reasoning_effort = "none"
+
+[run]
+concurrency = [4]
+warmup = 2
