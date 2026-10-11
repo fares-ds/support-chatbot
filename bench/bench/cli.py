@@ -26,6 +26,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=_levels,
         help="concurrency levels, such as 1 or 1,2,4 (default: the configuration's)",
     )
+    run.add_argument(
+        "--dataset",
+        type=Path,
+        help="a business's directory in data/, such as data/gov-uk (default: the configuration's)",
+    )
     run.add_argument("--turns", type=int, help="turns per level (default: the configuration's)")
     run.add_argument("--warmup", type=int, help="warm-up turns (default: the configuration's)")
     run.add_argument("--label", help="added to the results' name, such as vps-4gb")
@@ -44,6 +49,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     from bench.run import benchmark  # imports LiteLLM and DSPy, which take a few seconds
 
     config = load_config(arguments.config)
+    if arguments.dataset:
+        config = config.with_dataset(arguments.dataset)
     path = asyncio.run(
         benchmark(
             config,

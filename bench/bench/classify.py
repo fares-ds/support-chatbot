@@ -14,6 +14,8 @@ _WORD = re.compile(r"[\w']+")
 ON_TOPIC_MARGIN = 0.05
 """Gate 1's bias: off_topic must beat on_topic by this much similarity, or on_topic wins. A
 wrong on_topic is caught by Gates 2 and 3; a wrong decline leaves the customer stuck."""
+EMBED_BATCH = 16
+"""Texts per embedding request, as the knowledge base loads them."""
 
 
 @dataclass(frozen=True)
@@ -52,10 +54,14 @@ class EmbeddingCheck:
         embed: Embed,
         margin: float = ON_TOPIC_MARGIN,
     ) -> "EmbeddingCheck":
-        """Embeds every example phrase once."""
+        """Embeds every example phrase once, a batch at a time: TEI refuses a request with more
+        texts than its client batch limit, 32 by default."""
         labels = [category for category, phrases in examples.items() for _ in phrases]
         phrases = [phrase for category_phrases in examples.values() for phrase in category_phrases]
-        return cls(labels, _unit(await embed(phrases)), yes=yes, embed=embed, margin=margin)
+        vectors: list[list[float]] = []
+        for start in range(0, len(phrases), EMBED_BATCH):
+            vectors += await embed(phrases[start : start + EMBED_BATCH])
+        return cls(labels, _unit(vectors), yes=yes, embed=embed, margin=margin)
 
     async def classify(
         self,

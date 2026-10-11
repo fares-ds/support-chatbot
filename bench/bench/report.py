@@ -45,6 +45,7 @@ def summary_markdown(results: Mapping[str, Any]) -> str:
         "",
         f"- Docker host: {host['cpus']} CPUs, {_bytes(host['memory_bytes'])}, "
         f"{host['architecture']}, {host['os']}",
+        *_dataset(results),
         f"- Classifier: {models['classifier']} · Answer: {models['answer']}",
         f"- Embedding: {models['embedding']} · Reranker: {models['reranker']}",
         f"- Budgets: classify {budgets['classify_in']:,} in, {budgets['classify_out']:,} out · "
@@ -200,6 +201,17 @@ def compare_markdown(runs: Sequence[Mapping[str, Any]]) -> str:
         )
     header = ["", *[_run_name(run) for run in runs]]
     return "\n".join(["# Benchmark comparison", "", *_table(header, rows)]) + "\n"
+
+
+def _dataset(results: Mapping[str, Any]) -> list[str]:
+    """Results from before #13 name no dataset."""
+    dataset = results.get("dataset")
+    if not dataset:
+        return []
+    return [
+        f"- Dataset: {dataset['name']}, {dataset['samples']} samples; "
+        f"{dataset['chunks']} chunks from {dataset['documents']} documents"
+    ]
 
 
 def _run_name(run: Mapping[str, Any]) -> str:

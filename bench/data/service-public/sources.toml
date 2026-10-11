@@ -1,0 +1,134 @@
+# Where service-public's knowledge base comes from. fetch.py fetches each page into kb/ with
+# trafilatura, as KB-8's web import will. Each page states when DILA last checked it.
+
+license = "Licence Ouverte / Open Licence 2.0"
+attribution = "Source : Service-Public.gouv.fr, Direction de l'information légale et administrative (DILA)."
+retrieved = 2026-10-07
+
+[[documents]]
+file = "fr-compte-individuel.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2413"
+
+[[documents]]
+file = "fr-decouvert-autorise.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F31423"
+
+[[documents]]
+file = "fr-incidents-de-paiement.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F18777"
+
+[[documents]]
+file = "fr-mediateur-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F20523"
+
+[[documents]]
+file = "fr-mobilite-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F33881"
+
+[[documents]]
+file = "fr-tarifs-bancaires.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F848"
+
+[[documents]]
+file = "fr-cloture-compte-par-la-banque.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F31456"
+
+[[documents]]
+file = "fr-virement-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2384"
+
+[[documents]]
+file = "fr-prelevement-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F20752"
+
+[[documents]]
+file = "fr-delivrance-retrait-carte.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2420"
+
+[[documents]]
+file = "fr-paiement-par-carte.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2424"
+
+[[documents]]
+file = "fr-fraude-carte-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F31324"
+
+[[documents]]
+file = "fr-vol-carte-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2428"
+
+[[documents]]
+file = "fr-perte-carte-bancaire.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F31241"
+
+[[documents]]
+file = "fr-retrait-especes.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2421"
+
+[[documents]]
+file = "fr-paiement-sans-contact.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10410"
+
+[[documents]]
+file = "fr-payer-a-l-etranger.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2404"
+
+[[documents]]
+file = "fr-carte-avalee.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F31240"
+
+[[documents]]
+file = "fr-carte-de-retrait.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F24415"
+
+[[documents]]
+file = "fr-payer-factures-en-ligne.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F34276"
+
+[[documents]]
+file = "fr-payer-factures-par-telephone.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F36650"
+
+[[documents]]
+file = "fr-paiement-par-cheque.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2402"
+
+[[documents]]
+file = "fr-vol-cheque-chequier.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F2409"
+
+[[documents]]
+file = "fr-achat-distance-information.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10483"
+
+[[documents]]
+file = "fr-achat-distance-commande.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10488"
+
+[[documents]]
+file = "fr-achat-distance-paiement.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10486"
+
+[[documents]]
+file = "fr-achat-distance-retractation.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10485"
+
+[[documents]]
+file = "fr-achat-distance-livraison.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10037"
+
+[[documents]]
+file = "fr-achat-distance-litige.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F10868"
+
+[[documents]]
+file = "fr-garantie-legale-conformite.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F11094"
+
+[[documents]]
+file = "fr-garantie-commerciale.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F11093"
+
+[[documents]]
+file = "fr-garanties-achat-produit.md"
+origin = "https://www.service-public.gouv.fr/particuliers/vosdroits/F18954"

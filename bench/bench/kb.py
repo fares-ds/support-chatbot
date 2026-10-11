@@ -87,6 +87,12 @@ def chunk_markdown(
     return chunks
 
 
+def heading_paths(markdown: str) -> set[tuple[str, ...]]:
+    """Every section's heading path below the title, as chunks record them."""
+    _, sections = _parse(markdown)
+    return {section.path for section in sections}
+
+
 def _regroup(sections: list[_Section], units: list[tuple[int, str]]) -> list[_Section]:
     """Consecutive units of one section become one section with those paragraphs."""
     groups: list[tuple[int, _Section]] = []
@@ -142,6 +148,8 @@ def _parse(markdown: str) -> tuple[str, list[_Section]]:
     """The document's title (its first level-1 heading) and its sections, in order."""
     title = ""
     path: tuple[str, ...] = ()
+    levels: list[int] = []
+    """The level of each heading in the path."""
     sections = [_Section(path)]
     lines: list[str] = []
 
@@ -158,7 +166,13 @@ def _parse(markdown: str) -> tuple[str, list[_Section]]:
             if level == 1 and not title:
                 title = text
                 continue
-            path = (*path[: max(level - 2, 0)], text)
+            # A heading closes the open headings of its level and deeper, whatever levels the
+            # document skipped.
+            while levels and levels[-1] >= level:
+                levels.pop()
+                path = path[:-1]
+            levels.append(level)
+            path = (*path, text)
             sections.append(_Section(path))
         elif line.strip():
             lines.append(line.strip())
