@@ -35,7 +35,7 @@ You need Docker and [uv](https://docs.astral.sh/uv/).
 - In `frontend/`, with Node 24 and pnpm (the version in `frontend/package.json`'s `packageManager`; `corepack enable`, or `npx pnpm@<version>`): `pnpm install`, then `pnpm typecheck`.
 - **The API client is generated, and committed.** After changing a route, a response model or a WebSocket event (`backend/app/events.py`), run `pnpm --dir frontend generate` and commit what changes: CI regenerates it and fails on any difference. It exports the OpenAPI spec and the events' JSON Schema from the backend, without a server, then runs Hey API's openapi-ts and json-schema-to-typescript. Operations are named after their route functions, so `def health()` becomes `health()` and `healthOptions()` in TypeScript.
 - In `deploy/`: `uv run --no-project --python 3.10 --with pytest pytest` tests `sc`, the bundle builder and the upgrade test's helpers on the oldest Python `sc` supports; `uvx ruff check .` lints them.
-- The M0 benchmark times the AI pipeline against the running stack: see [bench/README.md](bench/README.md).
+- The M0 benchmark times the AI pipeline against the running stack, and scores it against the PRD's release gates: see [bench/README.md](bench/README.md). Its reports, such as [round 1](bench/reports/2026-10-11-bake-offs-round-1.md), are in `bench/reports/`.
 
 ## Workflow
 
