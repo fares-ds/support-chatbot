@@ -6,6 +6,7 @@ name: Default models
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - deploy/compose.yaml
       - .github/workflows/models.yml
@@ -17,6 +18,7 @@ permissions:
 jobs:
   tei:
     name: TEI serves the default models
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false

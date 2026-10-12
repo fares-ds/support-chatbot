@@ -1,9 +1,22 @@
 name: CI
 
+# Runs on every pull request once it is ready for review, unless it changes only docs (Markdown or
+# docs/) or the benchmark, which bench.yml checks. A draft skips it, since its second review and the
+# fixes come first (ADR-0036), so a pull request runs CI once. Merging doesn't run it again: the pull
+# request ran on its merge with main. Main runs it every Monday instead, which catches pull requests
+# that pass alone but break together, and keeps the dependency caches that pull requests restore.
+# By hand, it runs on any branch.
+
 on:
   pull_request:
-  push:
-    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/*.md"
+      - docs/**
+      - bench/**
+  schedule:
+    - cron: "47 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,27 +26,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pins:
-    name: Actions pinned by commit
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Every third-party action is pinned by commit SHA
-        run: |
-          # A tag can be moved to other code; a commit SHA cannot.
-          unpinned=$(grep -rhoE '^[[:space:]]*(- )?uses:[[:space:]]*[^[:space:]]+' .github/workflows \
-            | sed -E 's/.*uses:[[:space:]]*//' | grep -vE '^\./' | grep -vE '@[0-9a-f]{40}$' || true)
-          if [ -n "$unpinned" ]; then
-            echo "Pin these actions by commit SHA:"
-            echo "$unpinned"
-            exit 1
-          fi
-          grep -rhoE 'uses:[[:space:]]*[^[:space:]]+' .github/workflows | sort | uniq -c
-
   backend:
     name: Backend checks
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -48,6 +43,19 @@ jobs:
           working-directory: backend
           enable-cache: true
           cache-dependency-glob: uv.lock
+      # In this job rather than its own: GitHub bills each job at least a minute.
+      - name: Every third-party action is pinned by commit SHA
+        working-directory: .
+        run: |
+          # A tag can be moved to other code; a commit SHA cannot.
+          unpinned=$(grep -rhoE '^[[:space:]]*(- )?uses:[[:space:]]*[^[:space:]]+' .github/workflows \
+            | sed -E 's/.*uses:[[:space:]]*//' | grep -vE '^\./' | grep -vE '@[0-9a-f]{40}$' || true)
+          if [ -n "$unpinned" ]; then
+            echo "Pin these actions by commit SHA:"
+            echo "$unpinned"
+            exit 1
+          fi
+          grep -rhoE 'uses:[[:space:]]*[^[:space:]]+' .github/workflows | sort | uniq -c
       - name: Install
         run: uv sync --locked
       - name: Lint
@@ -65,6 +73,7 @@ jobs:
     # ADR-0026: the frontend's API client and event types are generated from the backend, and
     # committed. A backend change that alters them must commit the regenerated code with it.
     name: API client and event types
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -104,6 +113,7 @@ jobs:
 
   stack:
     name: Compose stack
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
