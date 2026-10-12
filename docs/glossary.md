@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-11, with the quality terms of the M0 benchmark: release gates, the embedding check, recall@5, the judge, and Darija's groups (ADR-0035). Before that, on 2026-10-09: the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
+Updated 2026-10-11, with the quality terms of the M0 benchmark: release gates, the embedding check, recall@5, the judge, and Darija's groups, with ADR-0035's rule for replies to Darija. Before that, on 2026-10-09: the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
 
 ## People and roles
 
@@ -74,11 +74,11 @@ Updated 2026-10-11, with the quality terms of the M0 benchmark: release gates, t
 
 | Term | Meaning | Not to be confused with |
 | --- | --- | --- |
-| Release gate | A threshold in the PRD's Release gates table, such as answer correctness ≥ 85% or requests for a person detected ≥ 98%. Once the test set holds 150 labelled cases, no model, prompt, chunking or threshold change ships without passing them in CI. The M0 benchmark scores its runs against them already. | Gate 1, Gate 3: the AI pipeline's steps |
-| Embedding check | CPU mode's cheaper classifier: a message takes the category of its most similar example phrase on TEI, with on-topic winning close calls (AI-8, [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). | Embedding model |
-| Recall@5 | Of the knowledge-base sections answerable questions need, the share found among the reranker's top 5 chunks. A release gate, ≥ 90%. | |
-| Judge | In the benchmark, the model that reads each answer beside its sources and expected facts, and decides which facts it states and which claims nothing supports (`bench judge`). | The weekly review, which people do |
-| Darija groups | The benchmark reports Darija by script, darija-latin and darija-arabic, since models read them very differently. Samples are Algerian Darija; a reply to Darija may be in Darija or Modern Standard Arabic ([ADR-0035](adr/0035-darija-replies-in-arabic-script.md)). | |
+| Release gate | A threshold in the PRD's [Release gates](prd.md#release-gates) table, such as answer correctness or requests for a person detected. Once the test set holds the PRD's minimum of labelled cases, no model, prompt, chunking or threshold change ships without passing them in CI. The M0 benchmark scores its runs against them already. | Gate 1, Gate 3: the AI pipeline's steps |
+| Embedding check | CPU mode's cheaper classifier: a message takes the category of its most similar example phrase on TEI (AI-8, [ADR-0025](adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). | Embedding model: the model that turns text into vectors, for search and for this check |
+| Recall@5 | Of the knowledge-base sections answerable questions need, the share found among the reranker's top 5 chunks. A release gate. | |
+| Judge | In the benchmark, the model that reads each answer beside its sources and expected facts, decides which facts it states and which claims nothing supports, and names the reply's language (`bench judge`). | The weekly review, which people do |
+| Darija groups | The benchmark reports Darija by script, darija-latin and darija-arabic, since models read them very differently. Samples are Algerian Darija. A reply to Darija is in the customer's language when it is in Darija or Modern Standard Arabic, in Arabic script; a reply in French is not ([ADR-0035](adr/0035-darija-replies-in-arabic-script.md)). | |
 
 ## Terms from the September design that V1 does not use
 

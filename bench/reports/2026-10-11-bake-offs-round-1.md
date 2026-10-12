@@ -29,7 +29,7 @@ With Gate 1's output budget doubled to 240 tokens, gpt-oss:20b on Acme Pay alone
 
 **The embedding check can't meet the off-topic gate.**
 - On every embedding model it declines between a third and three fifths of off-topic messages, against 95%.
-- ADR-0025's 0.05 on-topic margin explains little: without it, bge-m3 goes from 52% to 60%, and wrongly declines more.
+- The harness's 0.05 on-topic margin (`ON_TOPIC_MARGIN` in `bench/classify.py`) explains little: without it, bge-m3 goes from 52% to 60%, and wrongly declines more.
 - Each category has about a dozen example phrases, and the nearest one decides. Poems, recipes, sports and homework sit closer to some on-topic phrase than to an off-topic one.
 - It does detect requests for a person well on bge-m3, at 96%. But a classifier that answers off-topic messages fails Gate 1.
 
