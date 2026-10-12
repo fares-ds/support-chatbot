@@ -3,9 +3,9 @@ name: CI
 # Runs on every pull request once it is ready for review, unless it changes only docs (Markdown or
 # docs/) or the benchmark, which bench.yml checks. A draft skips it, since its second review and the
 # fixes come first (ADR-0036), so a pull request runs CI once. Merging doesn't run it again: the pull
-# request ran on its merge with main. Main runs it every Monday instead, which catches pull requests
-# that pass alone but break together, and keeps the dependency caches that pull requests restore.
-# By hand, it runs on any branch.
+# request ran on its merge with main as it was then. Main runs it every Monday instead, which
+# catches pull requests that pass alone but break together, and by hand before a release tag
+# (deploy/README.md). By hand, it also runs on any branch.
 
 on:
   pull_request:
@@ -23,7 +23,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A new push replaces a pull request's run; on main, a run by hand and Monday's both finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -56,6 +57,32 @@ jobs:
             exit 1
           fi
           grep -rhoE 'uses:[[:space:]]*[^[:space:]]+' .github/workflows | sort | uniq -c
+      - name: Every pull request job skips drafts
+        # A draft's second review and fixes come before its one CI run (ADR-0036). A job without
+        # the check would run on every push to a draft, and spend the account's few free minutes.
+        working-directory: .
+        run: |
+          uv run --no-project --python 3.12 --with pyyaml==6.0.2 python - <<'EOF'
+          import pathlib
+          import sys
+
+          import yaml
+
+          problems = []
+          for path in sorted(pathlib.Path(".github/workflows").glob("*.yml")):
+              workflow = yaml.safe_load(path.read_text())
+              triggers = workflow.get("on", workflow.get(True))  # YAML 1.1 reads a bare `on` as true
+              if not isinstance(triggers, dict) or "pull_request" not in triggers:
+                  continue
+              if "ready_for_review" not in (triggers["pull_request"] or {}).get("types", []):
+                  problems.append(f"{path.name}: pull_request needs ready_for_review in its types")
+              for name, job in workflow["jobs"].items():
+                  condition = str(job.get("if", ""))
+                  if "pull_request.draft" not in condition and "github.event_name == 'push'" not in condition:
+                      problems.append(f"{path.name}: job {name} runs on drafts")
+          print("\n".join(problems) or "Every pull request job skips drafts.")
+          sys.exit(1 if problems else 0)
+          EOF
       - name: Install
         run: uv sync --locked
       - name: Lint

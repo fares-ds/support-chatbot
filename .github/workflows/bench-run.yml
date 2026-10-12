@@ -2,7 +2,7 @@ name: Benchmark short run
 
 # Runs the M0 benchmark harness briefly on x86-64 against the stack, with a small model in the
 # stack's own Ollama. It takes about half an hour, so a pull request starts it only when the
-# harness's code, image or CI configs change, once it is ready for review. For a change to the
+# harness's code, image, stack tests or CI configs change, once it is ready for review. For a change to the
 # datasets, or to this file, run it by hand: gh workflow run bench-run.yml --ref <branch>.
 
 on:
@@ -10,7 +10,9 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - bench/bench/**
+      - bench/tests/test_stack.py
       - bench/Dockerfile
+      - bench/.dockerignore
       - bench/compose.yaml
       - bench/pyproject.toml
       - bench/uv.lock

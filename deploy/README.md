@@ -19,10 +19,11 @@ This directory also holds development files that stay out of the bundle:
 
 ## Releases
 
-A `vX.Y.Z` tag on `main` is a release (ADR-0027):
+A `vX.Y.Z` tag on `main` is a release (ADR-0027). Merges don't run CI, and publishing runs only the bundle's tests, so run CI on `main` first and tag the commit it passed on:
 
 ```sh
 git switch main && git pull --ff-only
+gh workflow run ci.yml --ref main   # then wait for it to pass: gh run watch
 git tag v1.4.0 && git push origin v1.4.0
 ```
 
