@@ -1,6 +1,6 @@
 # ADR-0027: Repository layout and git workflow
 
-- Status: Accepted; refined by [ADR-0036](0036-every-pull-request-gets-a-second-review.md), which settles its open point
+- Status: Accepted; refined by [ADR-0031](0031-pull-tokens-from-a-machine-account.md) and [ADR-0036](0036-every-pull-request-gets-a-second-review.md), which settles its open point
 - Date: 2026-10-06
 - Deciders: Fares
 
@@ -41,4 +41,4 @@ One person builds it with Claude Code. The code is proprietary ([ADR-0010](0010-
 
 ## Open
 
-- Whether to move to GitHub Pro so that GitHub enforces the merge rule on `main`.
+- Whether to move to GitHub Pro so that GitHub enforces the merge rule on `main`. Settled by [ADR-0036](0036-every-pull-request-gets-a-second-review.md): not for now.

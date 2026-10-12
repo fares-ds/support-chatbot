@@ -1,6 +1,6 @@
 Part of #
 
-<!-- Use a closing keyword only in the pull request that completes the issue: GitHub acts on one anywhere in this description, comments included. -->
+<!-- In the pull request that completes the issue, put a closing keyword in that first line instead. Write one nowhere else: GitHub acts on one anywhere in this description, comments included. -->
 
 ## Review guide
 

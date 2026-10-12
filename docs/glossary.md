@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-11, with the quality terms of the M0 benchmark: release gates, the embedding check, recall@5, the judge, and Darija's groups, with ADR-0035's rule for replies to Darija. Before that, on 2026-10-09: the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
+Updated 2026-10-12, with the terms for how pull requests are reviewed (ADR-0036). On 2026-10-11, the quality terms of the M0 benchmark: release gates, the embedding check, recall@5, the judge, and Darija's groups, with ADR-0035's rule for replies to Darija. Before that, on 2026-10-09: the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
 
 ## People and roles
 
@@ -79,6 +79,13 @@ Updated 2026-10-11, with the quality terms of the M0 benchmark: release gates, t
 | Recall@5 | Of the knowledge-base sections answerable questions need, the share found among the reranker's top 5 chunks. A release gate. | |
 | Judge | In the benchmark, the model that reads each answer beside its sources and expected facts, decides which facts it states and which claims nothing supports, and names the reply's language (`bench judge`). | The weekly review, which people do |
 | Darija groups | The benchmark reports Darija by script, darija-latin and darija-arabic, since models read them very differently. Samples are Algerian Darija. A reply to Darija is in the customer's language when it is in Darija or Modern Standard Arabic, in Arabic script; a reply in French is not ([ADR-0035](adr/0035-darija-replies-in-arabic-script.md)). | |
+
+## Building
+
+| Term | Meaning | Not to be confused with |
+| --- | --- | --- |
+| Second review | The review of a pull request by a Claude Code session that didn't write it, posted on GitHub as inline comments that the author answers and resolves. Risky pull requests also get an ultra review ([ADR-0036](adr/0036-every-pull-request-gets-a-second-review.md)). | The weekly review of AI answers |
+| Review guide | The first section of a pull request's description: up to five things for the vendor to check, such as the decisions it makes and what wasn't tested. | |
 
 ## Terms from the September design that V1 does not use
 

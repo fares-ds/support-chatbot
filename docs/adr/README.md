@@ -30,7 +30,7 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 | [0024](0024-stack-review-corrections.md) | Stack corrections after the stack review | Accepted; refined by 0025, amended by 0028 |
 | [0025](0025-cpu-classifier-fallbacks-and-uncalibrated-models.md) | CPU-mode classifier fallbacks and uncalibrated models | Accepted |
 | [0026](0026-typed-api-client-from-openapi.md) | The TypeScript API client is generated from FastAPI's OpenAPI spec | Accepted |
-| [0027](0027-repository-layout-and-git-workflow.md) | One repository with a root per toolchain, and a trunk-based workflow | Accepted; refined by 0036 |
+| [0027](0027-repository-layout-and-git-workflow.md) | One repository with a root per toolchain, and a trunk-based workflow | Accepted; refined by 0031 and 0036 |
 | [0028](0028-two-tei-containers.md) | Embeddings and reranking run in two TEI containers | Accepted |
 | [0029](0029-server-cli-in-standard-library-python.md) | The server CLI is a standard-library Python script | Accepted |
 | [0030](0030-vendor-sets-local-embedding-and-rerank-models.md) | The vendor sets each install's local embedding model and reranker | Accepted |
