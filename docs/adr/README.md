@@ -30,7 +30,7 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 | [0024](0024-stack-review-corrections.md) | Stack corrections after the stack review | Accepted; refined by 0025, amended by 0028 |
 | [0025](0025-cpu-classifier-fallbacks-and-uncalibrated-models.md) | CPU-mode classifier fallbacks and uncalibrated models | Accepted |
 | [0026](0026-typed-api-client-from-openapi.md) | The TypeScript API client is generated from FastAPI's OpenAPI spec | Accepted |
-| [0027](0027-repository-layout-and-git-workflow.md) | One repository with a root per toolchain, and a trunk-based workflow | Accepted |
+| [0027](0027-repository-layout-and-git-workflow.md) | One repository with a root per toolchain, and a trunk-based workflow | Accepted; refined by 0031 and 0036 |
 | [0028](0028-two-tei-containers.md) | Embeddings and reranking run in two TEI containers | Accepted |
 | [0029](0029-server-cli-in-standard-library-python.md) | The server CLI is a standard-library Python script | Accepted |
 | [0030](0030-vendor-sets-local-embedding-and-rerank-models.md) | The vendor sets each install's local embedding model and reranker | Accepted |
@@ -39,9 +39,10 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 | [0033](0033-backups-leave-out-the-encryption-key.md) | Backups leave out the encryption key | Accepted |
 | [0034](0034-upgrade-from-the-tested-release.md) | A release upgrades from the release CI tested it from | Accepted |
 | [0035](0035-darija-replies-in-arabic-script.md) | A Darija message gets its reply in Darija or Modern Standard Arabic | Accepted |
+| [0036](0036-every-pull-request-gets-a-second-review.md) | Every pull request gets a second review, and the vendor's | Accepted |
 
 ## Adding a decision
 
 1. Copy the format of an existing ADR: Status, Date, Deciders, Context, Decision, Consequences, and Open when something is unresolved.
-2. Take the next number (ADR-0036 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
+2. Take the next number (ADR-0037 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
 3. Add a row here and in the PRD's decision history, update the PRD sections the decision changes, and update the [glossary](../glossary.md) if it introduces or changes a term.

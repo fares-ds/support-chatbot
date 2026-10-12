@@ -10,6 +10,7 @@ on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - backend/**
       - deploy/**
@@ -25,7 +26,7 @@ env:
 jobs:
   check:
     name: Images, bundle and sc install, without publishing
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -259,7 +260,7 @@ jobs:
     # release still runs on the result, which sc upgrade's rollback relies on (ADR-0013). On a
     # release tag, publish runs the same test on the images it then pushes.
     name: Upgrade from the previous release
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     permissions:
       contents: read # the previous release's bundle

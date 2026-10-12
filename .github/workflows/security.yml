@@ -3,18 +3,17 @@ name: Security
 # Scans what installs run for known vulnerabilities (SEC-12): the backend's Python dependencies
 # (and the frontend's JavaScript ones, once frontend/ exists), and the images a release builds. It
 # fails on high and critical findings that have a fix. It also runs every Monday, because new
-# vulnerabilities appear without any change here. The M0 benchmark, which installs never run, is
-# left out.
+# vulnerabilities appear without any change here, but not after a merge: the pull request ran it. The
+# M0 benchmark, which installs never run, is left out.
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - backend/**
       - deploy/**
       - frontend/**
       - .github/workflows/security.yml
-  push:
-    branches: [main]
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -25,6 +24,7 @@ permissions:
 jobs:
   dependencies:
     name: Dependencies
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,6 +43,7 @@ jobs:
 
   images:
     name: Images
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
