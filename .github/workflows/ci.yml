@@ -78,7 +78,7 @@ jobs:
                   problems.append(f"{path.name}: pull_request needs ready_for_review in its types")
               for name, job in workflow["jobs"].items():
                   condition = str(job.get("if", ""))
-                  if "pull_request.draft" not in condition and "github.event_name == 'push'" not in condition:
+                  if "!github.event.pull_request.draft" not in condition and "github.event_name == 'push'" not in condition:
                       problems.append(f"{path.name}: job {name} runs on drafts")
           print("\n".join(problems) or "Every pull request job skips drafts.")
           sys.exit(1 if problems else 0)

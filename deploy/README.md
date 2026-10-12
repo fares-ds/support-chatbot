@@ -23,8 +23,10 @@ A `vX.Y.Z` tag on `main` is a release (ADR-0027). Merges don't run CI, and publi
 
 ```sh
 git switch main && git pull --ff-only
-gh workflow run ci.yml --ref main   # then wait for it to pass: gh run watch
-git tag v1.4.0 && git push origin v1.4.0
+gh workflow run ci.yml --ref main && sleep 10 &&
+  gh run watch --exit-status "$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" \
+    --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')" &&
+  git tag v1.4.0 && git push origin v1.4.0
 ```
 
 The Release workflow (`.github/workflows/release.yml`) then:
