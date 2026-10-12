@@ -92,7 +92,7 @@ class EmbeddingCheck:
         return category
 
     def _short_yes(self, message: str) -> bool:
-        """Up to three words, the first a yes: "Oui !", "Yes please", "Ih 3afak"."""
+        """Up to three words, the first a yes: "Oui !", "Yes please", "Wah svp"."""
         words = _WORD.findall(message.lower())
         return 1 <= len(words) <= 3 and words[0] in self._yes
 
