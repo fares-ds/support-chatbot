@@ -1,6 +1,6 @@
 # ADR-0027: Repository layout and git workflow
 
-- Status: Accepted
+- Status: Accepted; refined by [ADR-0036](0036-every-pull-request-gets-a-second-review.md), which settles its open point
 - Date: 2026-10-06
 - Deciders: Fares
 

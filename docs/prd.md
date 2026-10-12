@@ -913,6 +913,7 @@ How the first draft became this PRD. Each row links to its record.
 | 2026-10-08 | Backups leave out the encryption key: the vendor keeps each install's `.env` in a password manager, and a restore checks the key's fingerprint before changing anything. | [ADR-0033](adr/0033-backups-leave-out-the-encryption-key.md) |
 | 2026-10-08 | A release upgrades only from the release its upgrade test started from, or a later one; skipped releases are refused. | [ADR-0034](adr/0034-upgrade-from-the-tested-release.md) |
 | 2026-10-11 | A Darija message gets its reply in Darija or Modern Standard Arabic; French doesn't count. | [ADR-0035](adr/0035-darija-replies-in-arabic-script.md) |
+| 2026-10-12 | Every pull request gets a second review from a session that didn't write it, posted on GitHub, then the vendor's review from a short review guide; risky ones also get an ultra review. No GitHub Pro for now. | [ADR-0036](adr/0036-every-pull-request-gets-a-second-review.md) |
 | 2026-10-09 | `sc status` warns 14 days before an install's registry token expires, asking GitHub for the date. | [ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md) (update) |
 | 2026-10-05 | Built by Fares alone, with Claude Code; no timeline, milestones only. | — |
 | 2026-10-05 | The Owner sets the AI's display name; "agent" means a human, "AI assistant" the bot. | [glossary](glossary.md) |
