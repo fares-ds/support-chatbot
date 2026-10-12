@@ -1,6 +1,6 @@
 # Benchmark harness
 
-The M0 benchmark (#12). It times the AI pipeline end to end against a running stack, so that M0 can set the CPU numbers the PRD leaves open: latency targets, the classifier mode, default models, prompt budgets and minimum specs ([ADR-0011](../docs/adr/0011-cpu-first-models.md), [ADR-0024](../docs/adr/0024-stack-review-corrections.md)). It needs only the stack, not the product's code, and M3 can run it again against the real pipeline.
+The M0 benchmark (#12). It times the AI pipeline end to end against a running stack, and scores it against the PRD's release gates (#14, #15), so that M0 can set the CPU numbers the PRD leaves open: latency targets, the classifier mode, default models, prompt budgets and minimum specs ([ADR-0011](../docs/adr/0011-cpu-first-models.md), [ADR-0024](../docs/adr/0024-stack-review-corrections.md)). It needs only the stack, not the product's code, and M3 can run it again against the real pipeline.
 
 ## What a turn does
 
@@ -200,12 +200,14 @@ The fictional business tests whether a model keeps to its sources, since no mode
 Each directory holds:
 
 - **`turns.toml`:** the business's name and description, then turns. Each turn has an `id`, a `language` (en, fr, ar or darija), a `message` and Gate 1's expected `category`. It may have an `interface_language`, a `history`, `offered_person`, `cases` and a `note`.
-  - An on-topic turn expects an `answer`, with the `facts` a correct answer states (in English) and its `sources`, or a `handoff` when the knowledge base cannot answer it.
+  - An on-topic turn expects an `answer`, with the `facts` a correct answer states (in English) and its `sources`, or a `handoff` when the knowledge base cannot answer it. A fact states only what the question asks: delays, fees or conditions nobody asked about don't belong, unless the customer reports a problem and the fact is what to do (#41).
   - A source reads `file.md#Heading > Below it`, or `file.md` for anywhere in the document. ` | ` separates other places that state the same facts, such as a translation.
   - `cases` marks what else a turn tests: `needs_history`, `yes_after_offer` or `injection`.
 - **`kb/<language>-<topic>.md`:** the knowledge base, in Markdown.
 - **`sources.toml`:** each document's origin and license. Top-level keys apply to every document; a `[[documents]]` entry sets them for one file.
 - **`examples.toml`:** the embedding check's example phrases per category, and its words for yes. None may repeat a turn's message.
+
+Darija, in turns and example phrases alike, is Algerian Darija in either script, never Moroccan: *nheb* or *7ab* (نحب, حاب), not *bghit* (بغيت); *dorka* (دركا), not *daba* (دابا); *kach* (كاش), not *chi* (شي) (#43).
 
 Results are reported per group: en, fr, ar, darija-latin and darija-arabic. A Darija message's group is the script most of its letters are in; one without letters goes by the widget's language.
 

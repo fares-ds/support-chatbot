@@ -43,5 +43,5 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 ## Adding a decision
 
 1. Copy the format of an existing ADR: Status, Date, Deciders, Context, Decision, Consequences, and Open when something is unresolved.
-2. Take the next number (ADR-0035 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
+2. Take the next number (ADR-0036 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
 3. Add a row here and in the PRD's decision history, update the PRD sections the decision changes, and update the [glossary](../glossary.md) if it introduces or changes a term.
