@@ -17,7 +17,7 @@ On 2026-10-12, reviews by a session that hadn't written them found 8 problems in
 
 ## Decision
 
-1. **A second review, by a session that didn't write the code.** Once CI is green, a Claude Code session or agent that starts without the author's context runs `/code-review <PR> --comment` at high. Its findings land as inline comments. The author answers each one, with the commit that fixes it or the reason it stands, and resolves it. The author's own review before committing stays.
+1. **A second review, by a session that didn't write the code.** The author opens the pull request as a draft, which CI skips. A Claude Code session or agent that starts without the author's context runs `/code-review <PR> --comment` at high. Its findings land as inline comments. The author answers each one, with the commit that fixes it or the reason it stands, and resolves it. Then the author marks the pull request ready, and CI runs once. The author's own review before committing stays.
 2. **A deeper review for risky pull requests.** A pull request that touches `deploy/` (the server CLI and the install bundle), database migrations, `.github/` (CI and the release pipeline), `.gitattributes`, or secrets and sign-in also gets `/code-review ultra <PR> --post`. The vendor launches it; it is billed per run. It posts one comment rather than threads, so the author answers each of its findings in the description's Reviews section.
 3. **A review guide for the vendor.** After its issue line, each description starts with a review guide of up to five items: the decisions the pull request makes, links to its riskiest lines, what wasn't tested, and what to try by hand. [`.github/pull_request_template.md`](../../.github/pull_request_template.md) holds the outline.
 4. **Smaller pull requests.** About 400 lines of hand-written code at most. Generated files are marked `linguist-generated` in `.gitattributes`, so GitHub folds them away in the diff, and they don't count toward the 400.
@@ -26,7 +26,7 @@ On 2026-10-12, reviews by a session that hadn't written them found 8 problems in
 
 ## Consequences
 
-- A pull request waits a few minutes after CI for its second review, and longer when that review finds something to fix.
+- A pull request runs CI once, after its second review and fixes, rather than before them and again after. That matters on GitHub Free: October's first 12 days used 1,846 of its 2,000 Actions minutes, and the account's Actions budget is $0 (#46).
 - Review findings and their answers sit on GitHub next to the lines, not only in the description.
 - Formal approval isn't possible while Claude Code opens pull requests as the vendor. The vendor's review comment stands in for it.
 - An automatic review on every push is not used. The `claude-code-action` workflow would spend the private repository's 2,000 Actions minutes a month, and Anthropic's managed Code Review needs a Team or Enterprise plan.
