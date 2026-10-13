@@ -2,10 +2,9 @@ name: CI
 
 # Runs on every pull request once it is ready for review, unless it changes only docs (Markdown or
 # docs/) or the benchmark, which bench.yml checks. A draft skips it, since its second review and the
-# fixes come first (ADR-0036), so a pull request runs CI once. Merging doesn't run it again: the pull
-# request ran on its merge with main as it was then. Main runs it every Monday instead, which
-# catches pull requests that pass alone but break together, and by hand before a release tag
-# (deploy/README.md). By hand, it also runs on any branch.
+# fixes come first (ADR-0036), so a pull request runs CI once. It runs again on main after each
+# merge, which catches pull requests that pass alone but break together. By hand, it runs on any
+# branch.
 
 on:
   pull_request:
@@ -14,8 +13,8 @@ on:
       - "**/*.md"
       - docs/**
       - bench/**
-  schedule:
-    - cron: "47 5 * * 1"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +22,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # A new push replaces a pull request's run; on main, a run by hand and Monday's both finish.
+  # A new push replaces a pull request's run; on main, every merge's run finishes.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -59,7 +58,7 @@ jobs:
           grep -rhoE 'uses:[[:space:]]*[^[:space:]]+' .github/workflows | sort | uniq -c
       - name: Every pull request job skips drafts
         # A draft's second review and fixes come before its one CI run (ADR-0036). A job without
-        # the check would run on every push to a draft, and spend the account's few free minutes.
+        # the check would run on every push to a draft, and hold up a runner for nothing.
         working-directory: .
         run: |
           uv run --no-project --python 3.12 --with pyyaml==6.0.2 python - <<'EOF'

@@ -1,6 +1,6 @@
 # ADR-0027: Repository layout and git workflow
 
-- Status: Accepted; refined by [ADR-0031](0031-pull-tokens-from-a-machine-account.md) and [ADR-0036](0036-every-pull-request-gets-a-second-review.md), which settles its open point
+- Status: Accepted; refined by [ADR-0031](0031-pull-tokens-from-a-machine-account.md) and [ADR-0036](0036-every-pull-request-gets-a-second-review.md), which settles its open point; amended by [ADR-0037](0037-public-repository-proprietary-product.md): the repository is public
 - Date: 2026-10-06
 - Deciders: Fares
 

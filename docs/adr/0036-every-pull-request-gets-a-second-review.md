@@ -1,6 +1,6 @@
 # ADR-0036: Every pull request gets a second review, and the vendor's
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0037](0037-public-repository-proprietary-product.md): CI runs again after merges, and branch protection requires resolved threads
 - Date: 2026-10-12
 - Deciders: Fares
 - Refines: [ADR-0027](0027-repository-layout-and-git-workflow.md), and settles its open point
