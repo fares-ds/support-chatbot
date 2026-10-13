@@ -1,6 +1,6 @@
 # ADR-0010: Support Chatbot is proprietary
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0037](0037-public-repository-proprietary-product.md): the code is public, with every right reserved
 - Date: 2026-10-05
 - Deciders: Fares
 

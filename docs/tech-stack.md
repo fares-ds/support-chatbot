@@ -168,7 +168,7 @@ Queries must repeat the same cast and filter, or Postgres will not use the index
 
 | Concern | Choice |
 | --- | --- |
-| Source | One private GitHub repository, with a root per toolchain: `backend/`, `frontend/`, `deploy/`, `bench/` and `docs/`. Short-lived branches, squash-merged into `main` by pull request ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). |
+| Source | One public GitHub repository, its code proprietary ([ADR-0037](adr/0037-public-repository-proprietary-product.md)), with a root per toolchain: `backend/`, `frontend/`, `deploy/`, `bench/` and `docs/`. Short-lived branches, squash-merged into `main` by pull request ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). |
 | Releases | A `vX.Y.Z` tag on `main` builds every image and the install bundle under one version ([ADR-0027](adr/0027-repository-layout-and-git-workflow.md)). The Release workflow scans the images before pushing them, and attaches the bundle and its checksum to a GitHub release. |
 | Packaging | Docker images pinned by version, run with Docker Compose |
 | Registry | GitHub Container Registry, private: `support-chatbot-backend` and `support-chatbot-caddy`, linux/amd64. Each install pulls with its own classic token, `read:packages` only, from a machine account that can read nothing else ([ADR-0031](adr/0031-pull-tokens-from-a-machine-account.md); procedure in `deploy/README.md`). |

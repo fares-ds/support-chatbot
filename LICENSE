@@ -1,0 +1,8 @@
+Copyright (c) 2026 Fares Sayah. All rights reserved.
+
+This repository is public so that its code can be read. It is not open source. No permission is
+granted to use, copy, modify, merge, publish, distribute, sublicense, sell or deploy any part of
+it, in whole or in part, without a written agreement with the copyright holder.
+
+Third-party code, data and models in this repository keep their own licenses, recorded beside
+them, for example in bench/data/*/sources.toml.
