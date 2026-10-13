@@ -1,0 +1,14 @@
+---
+description: Every pull request is reviewed by a subagent that did not write it
+alwaysApply: true
+---
+
+# Pull request review
+
+Every pull request gets a local subagent review before it is marked ready ([ADR-0038](docs/adr/0038-every-pull-request-is-reviewed-by-a-subagent.md)).
+
+- The session that wrote the change does not run this review. A new agent session checks out the branch and launches the subagent.
+- Run `/review-bugbot` on every pull request. The subagent reviews the branch diff against `main`. Give it the repository path and the diff, and nothing of the author's reasoning.
+- When the change touches `deploy/`, database migrations, `.github/` (CI and the release pipeline), `.gitattributes`, or secrets and sign-in, also run `/review-security` in that same new session.
+- Write the result in the pull request's Reviews section: how many findings, which commit fixed each, and which stand and why.
+- Leave the pull request as a draft until that section is filled in.

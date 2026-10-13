@@ -39,11 +39,12 @@ Every decision behind Support Chatbot V1, in order. The PRD's [decision history]
 | [0033](0033-backups-leave-out-the-encryption-key.md) | Backups leave out the encryption key | Accepted |
 | [0034](0034-upgrade-from-the-tested-release.md) | A release upgrades from the release CI tested it from | Accepted |
 | [0035](0035-darija-replies-in-arabic-script.md) | A Darija message gets its reply in Darija or Modern Standard Arabic | Accepted |
-| [0036](0036-every-pull-request-gets-a-second-review.md) | Every pull request gets a second review, and the vendor's | Accepted; amended by 0037 |
+| [0036](0036-every-pull-request-gets-a-second-review.md) | Every pull request gets a second review, and the vendor's | Accepted; amended by 0037 and 0038 |
 | [0037](0037-public-repository-proprietary-product.md) | The repository is public; the product stays proprietary | Accepted |
+| [0038](0038-every-pull-request-is-reviewed-by-a-subagent.md) | Every pull request is reviewed by a local subagent | Accepted |
 
 ## Adding a decision
 
 1. Copy the format of an existing ADR: Status, Date, Deciders, Context, Decision, Consequences, and Open when something is unresolved.
-2. Take the next number (ADR-0038 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
+2. Take the next number (ADR-0039 next). Never renumber or delete an ADR. To change a decision, write a new ADR that supersedes or amends it, and update the old one's status line.
 3. Add a row here and in the PRD's decision history, update the PRD sections the decision changes, and update the [glossary](../glossary.md) if it introduces or changes a term.

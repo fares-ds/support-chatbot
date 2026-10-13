@@ -1,6 +1,6 @@
 # ADR-0036: Every pull request gets a second review, and the vendor's
 
-- Status: Accepted; amended by [ADR-0037](0037-public-repository-proprietary-product.md): CI runs again after merges, and branch protection requires resolved threads
+- Status: Accepted; amended by [ADR-0037](0037-public-repository-proprietary-product.md): CI runs again after merges, and branch protection requires resolved threads; amended by [ADR-0038](0038-every-pull-request-is-reviewed-by-a-subagent.md): the second review is a local subagent
 - Date: 2026-10-12
 - Deciders: Fares
 - Refines: [ADR-0027](0027-repository-layout-and-git-workflow.md), and settles its open point

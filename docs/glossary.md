@@ -2,7 +2,7 @@
 
 The words the PRD, the code and the team use for this product, one meaning per word. Entries marked **Open** are not settled yet.
 
-Updated 2026-10-12, with the terms for how pull requests are reviewed (ADR-0036). On 2026-10-11, the quality terms of the M0 benchmark: release gates, the embedding check, recall@5, the judge, and Darija's groups, with ADR-0035's rule for replies to Darija. Before that, on 2026-10-09: the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
+Updated 2026-10-13: the second review is a local subagent (ADR-0038). On 2026-10-12, the terms for how pull requests are reviewed (ADR-0036). On 2026-10-11, the quality terms of the M0 benchmark: release gates, the embedding check, recall@5, the judge, and Darija's groups, with ADR-0035's rule for replies to Darija. Before that, on 2026-10-09: the machine account (ADR-0031), the service account (ADR-0032), backups and snapshots (ADR-0033), the upgrade test's smoke test and seeds, the upgrade path (ADR-0034), and the API contract (ADR-0026).
 
 ## People and roles
 
@@ -84,7 +84,7 @@ Updated 2026-10-12, with the terms for how pull requests are reviewed (ADR-0036)
 
 | Term | Meaning | Not to be confused with |
 | --- | --- | --- |
-| Second review | The review of a pull request by a Claude Code session that didn't write it, posted on GitHub as inline comments that the author answers and resolves. Risky pull requests also get an ultra review ([ADR-0036](adr/0036-every-pull-request-gets-a-second-review.md)). | The weekly review of AI answers |
+| Second review | The review of a pull request by a Bugbot subagent in a session that didn't write it, run locally on the branch diff. The author records the findings in the description and answers each one. Risky pull requests also get a Security Review subagent ([ADR-0038](adr/0038-every-pull-request-is-reviewed-by-a-subagent.md)). | The weekly review of AI answers |
 | Review guide | The first section of a pull request's description: up to five things for the vendor to check, such as the decisions it makes and what wasn't tested. | |
 
 ## Terms from the September design that V1 does not use
