@@ -14,4 +14,4 @@ Part of #
 
 ## Reviews
 
-<!-- The author's /code-review before committing, then the second review's inline comments: how many, which commit fixed each, and which were answered without a change. Risky pull requests also get /code-review ultra (ADR-0036). -->
+<!-- The author's review before committing, then the subagent review (ADR-0038): Bugbot on every pull request, and Security Review as well when it touches deploy/, migrations, CI, .gitattributes, or secrets and sign-in. Record how many findings, which commit fixed each, and which were answered without a change. -->
