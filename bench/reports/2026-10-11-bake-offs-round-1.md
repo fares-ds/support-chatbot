@@ -7,7 +7,7 @@ Run on 2026-10-11 on the vendor's Mac, for #14 (the classifier) and #15 (models 
 - **Language models ran in Ollama's cloud only.** This Mac's RAM serves other work, so no local model ran (Fares, 2026-10-11). Cloud latency says nothing about an install, so this round compares quality only. None of the cloud models is a CPU candidate: the 1–7B models that would run on an install, and every CPU latency, wait for the VPS run (#17).
 - **TEI ran locally,** in Docker Desktop's VM (10 CPUs, 7.75 GiB), one pairing of embedding model and reranker at a time.
 - **The data** is #23's three datasets, with #41's expected facts and sources: facts state only what each question asks. Recall and correctness below are scored against #41's labels. Gate 1's labels are the same in both.
-- **Arabic and Darija samples await Fares's review (#13).** The large classifier agrees with 399 of Acme Pay's 400 labels, which suggests few category errors.
+- **Arabic and Darija samples.** Fares accepted every one on 2026-10-16 (#13), so the labels below stand. The large classifier agrees with 399 of Acme Pay's 400 labels, which suggests few category errors.
 
 ## Gate 1: the classifier (#14)
 
@@ -38,6 +38,8 @@ With Gate 1's output budget doubled to 240 tokens, gpt-oss:20b on Acme Pay alone
 **gpt-oss:20b shows what a reasoning model costs Gate 1.** At Gate 1's 120 output tokens, its reasoning cut 21 of Acme Pay's 400 replies short. All 29 of its failed turns were Arabic or Darija, where text costs more tokens. At 240 tokens nothing failed, but it still missed one Darija request for a person in six. It also called Free Fire and PlayStation questions off-topic, despite a business description that covers game credits.
 
 **Recommendation for #14:** the CPU-mode classifier should be a small language model, not the embedding check, if one of 1–4B meets the three gates and the latency target on the VPS. If none does, Gate 1 needs the external provider (AI-5), or the embedding check needs a redesign: far more examples per category, or a second stage for off-topic messages. That reverses part of AI-8 and ADR-0025, so the decision is Fares's once #17 has the CPU numbers.
+
+**Settled on 2026-10-16.** This accuracy comparison closes #14. The embedding check fails the off-topic gate, declining 34–60% of off-topic messages against 95%, and it gives up follow-up rewriting and language detection ([ADR-0025](../../docs/adr/0025-cpu-classifier-fallbacks-and-uncalibrated-models.md)). A language model can meet all three gates, as Gemma 4 31B does. The CPU classifier is a small model only if one of qwen3.5:2b, granite4:3b, or qwen3.5:0.8b meets the three gates and the latency target on the VPS. That run is #17: classify-only, per language, with off-topic messages declined, on-topic messages wrongly declined, requests for a person detected, and classify p50 and p95. This Mac did not run local models, so this report has no Mac latency. ADR-0025 and AI-8 stay as they are until #17 records the choice. The numbers above are the 11 October figures, unchanged.
 
 ## Retrieval (#15)
 
