@@ -84,6 +84,8 @@ Only Gemma 4 31B (cloud) answered, on Acme Pay's 400 samples. gpt-oss:120b judge
 
 **For #15's answer models:** a 31B model meets the answer gates. Whether a 4–7B one does is the question #17 must answer: run qwen3.5:4b and gemma4:e4b there, judged the same way.
 
+**Settled on 2026-10-16.** This retrieval comparison and the Gemma 4 31B answer run close #15. Keep bge-m3: recall@5 is 93.0% (198/213) with the mMiniLM reranker, and all four embedding models meet the 90% gate pooled. Arabic-script Darija is the weak group, at 78–85%. bge-reranker-v2-m3 has no recall in this round. On this CPU it took 7–8 s a rerank and then stalled; mMiniLM took about 1.7 s a turn. Whether it stays the CPU default is #17's measurement, not a change made here. Gemma 4 31B meets the three answer gates on Acme Pay (92.9% correct, 1.7% unsupported, 0/33 unanswerable answered), judged by gpt-oss:120b. Latin-script Darija got French replies 22 times out of 38. That is a finding for #17 to watch, not a decision that the language needs an external provider. qwen3.5:4b and gemma4:e4b, judged the same way, plus rerank recall and latency for bge-reranker-v2-m3 against mMiniLM, plus speed and memory, are #17. This Mac did not run local models, so this report has no Mac speed or memory table. The numbers above are the 11 October figures, unchanged.
+
 ## What the VPS run (#17) must settle
 
 1. **Gate 1:** at least two 1–4B models (qwen3.5:2b, granite4:3b, qwen3.5:0.8b were the shortlist) against the three gates, with p50 and p95 classify latency.
